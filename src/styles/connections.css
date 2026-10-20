@@ -1,0 +1,79 @@
+.connections-page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 4px 32px;
+  overflow-y: auto;
+}
+
+.connections-stop-card .connections-stop-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.connection-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.connection-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.connection-status.status-connected { color: var(--ok, #2e7d32); }
+.connection-status.status-awaiting_user_authorization { color: var(--warning, #b26a00); }
+.connection-status.status-failed, .connection-status.status-expired { color: var(--danger, #c62828); }
+
+.connection-scopes {
+  margin: 0;
+  font-size: 12px;
+  opacity: 0.8;
+  word-break: break-all;
+}
+
+.connection-tools { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  opacity: 0.85;
+}
+.chip-sensitive { font-weight: 600; }
+.chip-write { opacity: 0.95; }
+
+.connection-perms { display: flex; gap: 14px; flex-wrap: wrap; }
+.connection-perms label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+
+.connection-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.connection-key-entry { display: inline-flex; gap: 8px; align-items: center; }
+.connection-key-entry input { min-width: 260px; }
+
+.connection-msg { margin: 0; font-size: 12px; color: var(--ok, #2e7d32); }
+.connections-error { margin: 0; font-size: 12px; color: var(--danger, #c62828); }
+.connections-note { margin: 0; font-size: 12px; opacity: 0.65; }
+.connections-msg { margin: 0; font-size: 12px; opacity: 0.85; }
+
+.connections-form { display: grid; grid-template-columns: repeat(2, minmax(200px, 1fr)); gap: 8px; }
+.connections-form button { grid-column: span 2; justify-self: start; }
+
+.connections-audit { margin: 0; padding-left: 18px; font-size: 12px; }
+.connections-audit li { line-height: 1.7; }
+
+.connection-guide summary { cursor: pointer; font-size: 12px; }
+
+@media (max-width: 720px) {
+  .connections-form { grid-template-columns: 1fr; }
+  .connections-form button { grid-column: span 1; }
+}

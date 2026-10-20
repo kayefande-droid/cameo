@@ -1,0 +1,126 @@
+{
+  "schema": "cameo.capability-registry.v1",
+  "source": {
+    "upstream": "https://github.com/affaan-m/ECC",
+    "upstreamVersion": "ecc-universal 2.2.3",
+    "upstreamCommit": "6f1881aeafa3c48f7b603cc4be4b2e4e70daad59",
+    "upstreamLicense": "MIT (c) 2026 Affaan Mustafa",
+    "note": "Metadata adapted from the audited ECC repository for CAMEO's capability registry. No ECC scripts, hooks, or installers are bundled or executed; CAMEO implements each capability with its own typed tools and security gates."
+  },
+  "selection": {
+    "toolBudget": "only CAMEO-owned tools: bounded project snapshot, configured provider chat, allowlisted checks, per-file approved proposals, read-only review workers",
+    "externalExecution": "none"
+  },
+  "capabilities": [
+    {
+      "id": "tdd-workflow",
+      "origin": "ECC skill tdd-workflow (MIT), adapted",
+      "agent": "forge",
+      "phase": "implement",
+      "description": "Write a failing test first, implement the smallest change to make it pass, then refactor with coverage intact.",
+      "tools": ["provider_chat", "allowlisted_checks", "file_proposals"],
+      "permissions": ["read_bounded_project_snapshot", "propose_files"],
+      "dependencies": [],
+      "availability": "active"
+    },
+    {
+      "id": "verification-loop",
+      "origin": "ECC skill verification-loop (MIT), adapted",
+      "agent": "forge",
+      "phase": "verify",
+      "description": "Six-phase verification: build, typecheck, lint, tests, security-relevant grep, and diff review with a real PASS/FAIL report from executed commands only.",
+      "tools": ["allowlisted_checks", "provider_chat"],
+      "permissions": ["read_project_scripts", "run_allowlisted_commands"],
+      "dependencies": [],
+      "availability": "active"
+    },
+    {
+      "id": "build-error-repair",
+      "origin": "ECC agent build-error-resolver (MIT), adapted",
+      "agent": "forge",
+      "phase": "fix",
+      "description": "Turn a real failing command output into a reproducible defect fix; verify the exact failing phase before completion.",
+      "tools": ["allowlisted_checks", "file_proposals", "provider_chat"],
+      "permissions": ["read_bounded_project_snapshot", "propose_files"],
+      "dependencies": ["verification-loop"],
+      "availability": "active"
+    },
+    {
+      "id": "security-review",
+      "origin": "ECC skill security-review (MIT), adapted",
+      "agent": "sentinel",
+      "phase": "review",
+      "description": "Trust boundaries, secret exposure, unsafe input, destructive behavior, and missing regression tests, reviewed read-only with no execution.",
+      "tools": ["review_workers", "bounded_project_snapshot"],
+      "permissions": ["read_bounded_project_snapshot"],
+      "dependencies": [],
+      "availability": "active"
+    },
+    {
+      "id": "code-review",
+      "origin": "ECC rules/common/code-review (MIT), adapted",
+      "agent": "atlas",
+      "phase": "review",
+      "description": "Evidence-based review of correctness, assumptions, and integration risk with concrete file references and no self-approval of produced output.",
+      "tools": ["review_workers", "bounded_project_snapshot"],
+      "permissions": ["read_bounded_project_snapshot"],
+      "dependencies": [],
+      "availability": "active"
+    },
+    {
+      "id": "plan-acceptance-criteria",
+      "origin": "ECC command feature-development (MIT), adapted",
+      "agent": "atlas",
+      "phase": "plan",
+      "description": "Decompose a task into 3-6 concrete steps with acceptance criteria and explicit tool/permission needs before any implementation.",
+      "tools": ["provider_chat"],
+      "permissions": ["read_bounded_project_snapshot"],
+      "dependencies": [],
+      "availability": "active"
+    },
+    {
+      "id": "documentation-lookup",
+      "origin": "ECC skill documentation-lookup (MIT), adapted",
+      "agent": "atlas",
+      "phase": "research",
+      "description": "Prefer current official library docs and pinned sources over training data; cite the source before relying on a documented API.",
+      "tools": ["provider_chat", "developer_probes"],
+      "permissions": ["read_project_metadata"],
+      "dependencies": [],
+      "availability": "active"
+    },
+    {
+      "id": "accessibility-review",
+      "origin": "ECC skill accessibility (MIT), adapted",
+      "agent": "pixel",
+      "phase": "review",
+      "description": "Accessible UI feedback: semantic components, keyboard navigation, contrast, target size, and reduced-motion support.",
+      "tools": ["provider_chat", "bounded_project_snapshot"],
+      "permissions": ["read_bounded_project_snapshot"],
+      "dependencies": [],
+      "availability": "advisory-only"
+    },
+    {
+      "id": "conventional-commit-review",
+      "origin": "ECC skill conventional-commit-review (MIT), adapted",
+      "agent": "forge",
+      "phase": "report",
+      "description": "Summarize verified changed files and outcomes; git push, hooks, and remote workflows remain unavailable to agents.",
+      "tools": ["provider_chat"],
+      "permissions": ["none"],
+      "dependencies": ["verification-loop"],
+      "availability": "advisory-only"
+    },
+    {
+      "id": "memory-governance",
+      "origin": "ECC unified-memory vault + schemas/memory.schema.json (MIT), adapted",
+      "agent": "cameo",
+      "phase": "remember",
+      "description": "Project-scoped, user-editable memory of decisions, verified fixes, commands, and patterns, with inspect/edit/delete controls and secret redaction.",
+      "tools": ["memory_store"],
+      "permissions": ["read_write_project_memory"],
+      "dependencies": [],
+      "availability": "active"
+    }
+  ]
+}
