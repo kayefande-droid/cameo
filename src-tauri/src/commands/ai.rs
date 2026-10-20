@@ -749,8 +749,15 @@ async fn chat_stream(
     }
     let base = provider_base(provider, &opts)?;
     // Route the call through CAMEO's own proxy profile unless the caller pinned one.
-    let proxy_eff: Option<String> = opts.proxy_profile_id.clone().or_else(|| active_proxy_id(state));
-    let client = build_client(
+    // Auto-picked profiles are best-effort: a broken/unreachable proxy must never
+    // take chat down, so a network-level failure falls back to a direct connection.
+    let proxy_explicit = opts.proxy_profile_id.is_some();
+    let proxy_eff: Option<String> = opts
+        .proxy_profile_id
+        .clone()
+        .or_else(|| active_proxy_id(state));
+    let mut auto_proxy_used = proxy_eff.is_some() && !proxy_explicit;
+    let mut client = build_client(
         proxy_eff.as_deref(),
         state,
         request_timeout(&opts),
@@ -790,18 +797,39 @@ async fn chat_stream(
         }
         let body = build_chat_payload(provider, &current_model, &messages, &opts)?;
 
-        let mut req = client.post(&url).json(&body);
-        if let Some(k) = &key {
-            req = req.bearer_auth(k);
-        }
-        if provider == "openrouter" {
-            req = req.header("HTTP-Referer", "https://cameo.local");
-        }
+        let mut req = {
+            let mut r = client.post(&url).json(&body);
+            if let Some(k) = &key {
+                r = r.bearer_auth(k);
+            }
+            if provider == "openrouter" {
+                r = r.header("HTTP-Referer", "https://cameo.local");
+            }
+            r
+        };
 
-        let resp = req
-            .send()
-            .await
-            .map_err(|e| format!("network error calling {provider}: {e}"))?;
+        let resp = match req.send().await {
+            Ok(r) => r,
+            Err(e) if auto_proxy_used => {
+                // Broken auto-picked proxy: drop to a direct connection for
+                // this chat (and the fallback probes that may follow).
+                client = build_client(None, state, request_timeout(&opts))?;
+                auto_proxy_used = false;
+                let mut retry = client.post(&url).json(&body);
+                if let Some(k) = &key {
+                    retry = retry.bearer_auth(k);
+                }
+                if provider == "openrouter" {
+                    retry = retry.header("HTTP-Referer", "https://cameo.local");
+                }
+                retry.send().await.map_err(|e| format!("network error calling {provider}: {e}"))?
+            }
+            Err(e) => {
+                let _ = e;
+                return Err(format!("network error calling {provider}: {e}"));
+            }
+        };
+
         let status = resp.status().as_u16();
         if status != 200 {
             let text = resp.text().await.unwrap_or_default();
