@@ -614,6 +614,39 @@ mod chat_payload_tests {
         assert!(c.is_empty());
     }
 
+    /// Live sanity check of the exact production fallback path for a
+    /// tier-gated model. Skipped by default because it hits the network
+    /// with the saved NVIDIA key: run once with `cargo test -- --ignored`.
+    #[test]
+    #[ignore = "live API check: needs a saved NVIDIA key and network access"]
+    fn live_find_served_model_recovers_from_gated_model() {
+        let gated = "nvidia/nemotron-3-super-120b-a12b";
+        let key = get_key_sync("nvidia")
+            .unwrap()
+            .expect("NVIDIA key must be saved in the credential store");
+        let mut db_path = std::env::temp_dir();
+        db_path.push("cameo_livetest.tmp.db");
+        let _ = std::fs::remove_file(&db_path);
+        let state = AppState::new(crate::commands::store::open_db(&db_path));
+        let client = reqwest::Client::new();
+        let served = tauri::async_runtime::block_on(find_served_model(
+            &client,
+            "nvidia",
+            "https://integrate.api.nvidia.com/v1",
+            Some(&key),
+            gated,
+            &state,
+        ))
+        .expect("fallback must find at least one model served for this account");
+        assert_ne!(served, gated);
+        assert_eq!(
+            prefs_get(&state, &verified_model_pref_key("nvidia")).as_deref(),
+            Some(served.as_str()),
+            "verified model must be persisted"
+        );
+        let _ = std::fs::remove_file(&db_path);
+    }
+
     fn messages() -> Vec<ChatMessage> {
         vec![ChatMessage { role: "user".into(), content: "hello".into() }]
     }
