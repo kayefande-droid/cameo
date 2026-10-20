@@ -258,6 +258,34 @@ fn active_proxy_id(state: &AppState) -> Option<String> {
     .ok()
 }
 
+/// Cached HTTP clients per (proxy, timeout) so streaming chats and probes do
+/// not pay a fresh TLS handshake on every message.
+static CLIENT_CACHE: std::sync::Mutex<Option<std::collections::HashMap<String, reqwest::Client>>> =
+    std::sync::Mutex::new(None);
+
+fn cached_client(proxy_id: Option<&str>, state: &AppState, request_timeout: Duration) -> Result<reqwest::Client, String> {
+    let key = format!(
+        "{}|{}",
+        proxy_id.unwrap_or("direct"),
+        request_timeout.as_millis()
+    );
+    {
+        let mut guard = CLIENT_CACHE.lock().map_err(|_| "client cache poisoned")?;
+        if let Some(clients) = guard.as_ref() {
+            if let Some(c) = clients.get(&key) {
+                return Ok(c.clone());
+            }
+        }
+    }
+    let client = build_client(proxy_id, state, request_timeout)?;
+    if let Ok(mut guard) = CLIENT_CACHE.lock() {
+        guard
+            .get_or_insert_with(std::collections::HashMap::new)
+            .insert(key, client.clone());
+    }
+    Ok(client)
+}
+
 fn prefs_get(state: &AppState, key: &str) -> Option<String> {
     let db = state.db.lock().ok()?;
     db.query_row("SELECT value FROM prefs WHERE key = ?1", [key], |r| r.get::<_, String>(0)).ok()
@@ -341,7 +369,24 @@ async fn find_served_model(
     if provider != "nvidia" {
         return None;
     }
-    // Cheap catalog fetch first; candidates are verified+defaults, then catalog ids.
+    // Well-known lightweight models that broadly serve across NVIDIA tiers;
+    // probed before paying for a catalog fetch.
+    const KNOWN_LIGHTWEIGHT: [&str; 3] = [
+        "openai/gpt-oss-20b",
+        "deepseek-ai/deepseek-v4.1-flash",
+        "mistralai/mistral-7b-instruct-v0.3",
+    ];
+    let seeds: Vec<String> = KNOWN_LIGHTWEIGHT.iter().map(|s| s.to_string()).collect();
+    let verified = prefs_get(state, &verified_model_pref_key(provider));
+    // Cheapest path first: probe the last verified model and the known
+    // lightweight defaults BEFORE paying for a catalog fetch.
+    for cand in fallback_candidates(verified.as_deref(), &seeds, failed) {
+        if probe_model_serves(client, base, key, &cand).await {
+            persist_verified_model(state, provider, &cand);
+            return Some(cand);
+        }
+    }
+    // Nothing pre-known served: fetch the catalog and probe its ids.
     let mut catalog: Vec<String> = Vec::new();
     let mut req = client.get(format!("{base}/models"));
     if let Some(k) = key {
@@ -360,12 +405,10 @@ async fn find_served_model(
             }
         }
     }
-    let verified = prefs_get(state, &verified_model_pref_key(provider));
-    let candidates = fallback_candidates(verified.as_deref(), &catalog, failed);
-    for cand in &candidates {
-        if probe_model_serves(client, base, key, cand).await {
-            persist_verified_model(state, provider, cand);
-            return Some(cand.clone());
+    for cand in fallback_candidates(None, &catalog, failed) {
+        if probe_model_serves(client, base, key, &cand).await {
+            persist_verified_model(state, provider, &cand);
+            return Some(cand);
         }
     }
     None
@@ -386,7 +429,7 @@ pub async fn list_models(provider: String, state: State<'_, AppState>) -> Result
 fn list_models_sync(provider: &str, state: &AppState) -> Result<Vec<ModelInfo>, String> {
     let base = provider_base(provider, &GenOpts::default())?;
     let proxy_id = active_proxy_id(state);
-    let client = build_client(proxy_id.as_deref(), state, Duration::from_secs(600))?;
+    let client = cached_client(proxy_id.as_deref(), state, Duration::from_secs(600))?;
     match provider {
         "openrouter" => {
             let resp = tauri::async_runtime::block_on(async {
@@ -757,7 +800,7 @@ async fn chat_stream(
         .clone()
         .or_else(|| active_proxy_id(state));
     let mut auto_proxy_used = proxy_eff.is_some() && !proxy_explicit;
-    let mut client = build_client(
+    let mut client = cached_client(
         proxy_eff.as_deref(),
         state,
         request_timeout(&opts),
@@ -813,7 +856,7 @@ async fn chat_stream(
             Err(e) if auto_proxy_used => {
                 // Broken auto-picked proxy: drop to a direct connection for
                 // this chat (and the fallback probes that may follow).
-                client = build_client(None, state, request_timeout(&opts))?;
+                client = cached_client(None, state, request_timeout(&opts))?;
                 auto_proxy_used = false;
                 let mut retry = client.post(&url).json(&body);
                 if let Some(k) = &key {
