@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   upsertTask: vi.fn(),
   addTaskEvent: vi.fn(),
   streamChat: vi.fn(),
+  invoke: vi.fn(),
 }));
 
 vi.mock("../src/services/store", () => mocks);
@@ -26,7 +27,9 @@ vi.mock("../src/services/ai", () => ({
   streamChat: mocks.streamChat,
   cancelChat: vi.fn().mockResolvedValue(true),
   newRequestId: vi.fn(() => `request-${Math.random()}`),
+  DEFAULT_BRAIN_SELECTION: { provider: "nvidia", model: "stepfun-ai/step-5-preview" },
 }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: mocks.invoke }));
 
 import TaskExecutionWindow from "../src/components/TaskExecutionWindow";
 import type { TaskRecord } from "../src/types/tasks";
@@ -182,5 +185,28 @@ describe("specialist task execution", () => {
     expect(reviewButton).toBeTruthy();
     expect(mocks.applyFileProposal).not.toHaveBeenCalled();
     expect(mocks.proposeFiles).not.toHaveBeenCalled();
+  });
+
+  it("runs plan, apply and verify without manual clicks when autopilot is on", async () => {
+    mocks.getPref.mockImplementation(async (key: string) =>
+      key === "autopilot" ? "1" : JSON.stringify({ provider: "openrouter", model: "vendor/model-x" }));
+    mocks.invoke.mockImplementation(async (cmd: string) => {
+      if (cmd === "inspect_project") return { frameworks: [], scripts: [["test", "npm test"]] };
+      if (cmd === "run_project_command") return { exit_code: 0, stdout: "ok", stderr: "" };
+      throw new Error(`unexpected invoke ${cmd}`);
+    });
+    try {
+      render(<Harness />);
+      fireEvent.click(screen.getByRole("button", { name: "Plan with ATLAS" }));
+      // No manual approval clicks: the proposal is applied by itself.
+      await waitFor(() => expect(mocks.applyFileProposal).toHaveBeenCalledWith("proposal-1"));
+      await waitFor(() => {
+        const last = mocks.upsertTask.mock.calls.at(-1)?.[0] as TaskRecord;
+        expect(last.status).toBe("completed");
+      });
+      expect(mocks.addTaskEvent.mock.calls.some(([, kind]) => kind === "autopilot")).toBe(true);
+    } finally {
+      mocks.getPref.mockImplementation(async () => JSON.stringify({ provider: "openrouter", model: "vendor/model-x" }));
+    }
   });
 });

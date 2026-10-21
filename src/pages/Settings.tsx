@@ -5,6 +5,13 @@ import { getPref, setPref } from "../services/store";
 import { PROVIDERS, type AIProviderId, type ModelInfo } from "../types/ai";
 import type { ModelSelection } from "../App";
 import ConfirmDialog from "../components/Dialogs";
+import {
+  operatorConfigure,
+  operatorSetFullAccess,
+  operatorSetRoot,
+  operatorStatus,
+  type OperatorStatus,
+} from "../services/operator";
 
 export default function Settings({ onSelectionChange }: { onSelectionChange?: (selection: ModelSelection) => void }) {
   const [active, setActive] = useState<AIProviderId>("openrouter");
@@ -21,8 +28,13 @@ export default function Settings({ onSelectionChange }: { onSelectionChange?: (s
   const [confirmClear, setConfirmClear] = useState(false);
   const [dockX, setDockX] = useState(0);
   const [dockY, setDockY] = useState(0);
+  const [autonomy, setAutonomy] = useState<OperatorStatus | null>(null);
+  const [autonomyError, setAutonomyError] = useState<string | null>(null);
 
   useEffect(() => {
+    void operatorStatus()
+      .then(setAutonomy)
+      .catch((e) => setAutonomyError(String(e)));
     void Promise.all([getPref("dock_offset_x"), getPref("dock_offset_y")]).then(([x, y]) => {
       setDockX(Math.max(-600, Math.min(600, Number(x ?? 0) || 0)));
       setDockY(Math.max(-500, Math.min(500, Number(y ?? 0) || 0)));
@@ -214,8 +226,23 @@ export default function Settings({ onSelectionChange }: { onSelectionChange?: (s
         {selection && (
           <div className="note" style={{ marginTop: 8 }}>
             Selected: {selection.provider} / {selection.model}
+            <button
+              className="btn small"
+              style={{ marginLeft: 8 }}
+              title="Reset the main brain to STEP-5-Preview (NVIDIA, verified serving)"
+              onClick={async () => {
+                const { DEFAULT_BRAIN_SELECTION } = await import("../services/ai");
+                const brain = { ...DEFAULT_BRAIN_SELECTION };
+                setSelectionLocal(brain);
+                onSelectionChange?.(brain);
+                void setPref("model_selection", JSON.stringify(brain));
+              }}
+            >
+              Use DeepSeek brain
+            </button>
           </div>
         )}
+        <p className="note" style={{ marginTop: 6 }}>Main brain default: STEP-5-Preview via NVIDIA — stepfun-ai/step-5-preview, the last model proven live-serving on this machine. OpenRouter GPT-5.5 Pro did not answer with the saved key; pick another OpenRouter model here any time.</p>
         <div className="note" style={{ marginTop: 8 }}>
           Specialist review model: {reviewUsesPrimary ? `primary (${selection?.provider ?? "not configured"} / ${selection?.model ?? "no model"})` : `${reviewSelection?.provider} / ${reviewSelection?.model}`}
           {!reviewUsesPrimary && (
@@ -252,6 +279,92 @@ export default function Settings({ onSelectionChange }: { onSelectionChange?: (s
             void Promise.all([setPref("dock_offset_x", "0"), setPref("dock_offset_y", "0")]).then(() => invoke("dock_reposition")).catch((error) => setErr(String(error)));
           }}>Reset to center below webcam</button>
         </div>
+      </div>
+
+      <div className="card">
+        <h3>Autonomy</h3>
+        <p className="note" style={{ marginTop: 6 }}>
+          Grants agents real capability on this machine: commands run inside one project folder you
+          pick, live https fetches, and launching apps. Destructive or irreversible commands still
+          require an explicit confirmation. Every attempt — allowed or refused — is written to the
+          audit log, and the dock&apos;s Stop control remains the global kill switch.
+        </p>
+        <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={autonomy?.enabled ?? false}
+            onChange={(e) => {
+              const next = { enabled: e.target.checked, net: autonomy?.net ?? false, device: autonomy?.device ?? false };
+              void operatorConfigure(next)
+                .then(setAutonomy)
+                .catch((err) => setAutonomyError(String(err)));
+            }}
+          />
+          Enable autonomy
+        </label>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
+          <button
+            className="btn small"
+            onClick={() => {
+              void (async () => {
+                try {
+                  const { open } = await import("@tauri-apps/plugin-dialog");
+                  const dir = await open({ directory: true });
+                  if (typeof dir === "string" && dir) {
+                    setAutonomy(await operatorSetRoot(dir));
+                    setAutonomyError(null);
+                  }
+                } catch (err) {
+                  setAutonomyError(String(err));
+                }
+              })();
+            }}
+          >
+            {autonomy?.root ? "Change project root" : "Choose project root"}
+          </button>
+          <span className="note mono" style={{ wordBreak: "break-all" }}>
+            {autonomy?.root ?? "No root selected — commands cannot run."}
+          </span>
+        </div>
+        <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 }}>
+          <input
+            type="checkbox"
+            checked={autonomy?.net ?? false}
+            onChange={(e) => {
+              const next = { enabled: autonomy?.enabled ?? false, net: e.target.checked, device: autonomy?.device ?? false };
+              void operatorConfigure(next).then(setAutonomy).catch((err) => setAutonomyError(String(err)));
+            }}
+          />
+          Allow live internet access (public https only; never localhost or private IPs)
+        </label>
+        <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
+          <input
+            type="checkbox"
+            checked={autonomy?.device ?? false}
+            onChange={(e) => {
+              const next = { enabled: autonomy?.enabled ?? false, net: autonomy?.net ?? false, device: e.target.checked };
+              void operatorConfigure(next).then(setAutonomy).catch((err) => setAutonomyError(String(err)));
+            }}
+          />
+          Allow device control (launch apps and hand URLs to the default handler)
+        </label>
+        <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}>
+          <input
+            type="checkbox"
+            checked={autonomy?.fullAccess ?? false}
+            onChange={(e) => {
+              const enable = e.target.checked;
+              const apply = () => void operatorSetFullAccess(enable).then(setAutonomy).catch((err) => setAutonomyError(String(err)));
+              if (enable && !autonomy?.fullAccess) {
+                if (window.confirm("Grant CAMEO and all its agents full access to all system files and configuration, including drive roots? Destructive commands still ask for confirmation and everything is audit-logged.")) apply();
+              } else {
+                apply();
+              }
+            }}
+          />
+          Full system access (any folder incl. drive roots — destructive actions still ask first)
+        </label>
+        {autonomyError && <div className="note danger" style={{ marginTop: 8 }}>{autonomyError}</div>}
       </div>
 
       <div className="card">

@@ -3,6 +3,7 @@ use commands::ai;
 use commands::browser;
 use commands::gateway;
 use commands::mcp;
+use commands::operator;
 use commands::devtools;
 use commands::power;
 use commands::window::{dock_reposition, set_window_mode};
@@ -41,8 +42,20 @@ pub fn run() {
             ai::test_connection,
             ai::chat,
             ai::chat_cancel,
+            ai::chat_tool_decision,
             power::power_action,
             power::power_status,
+            operator::operator_status,
+            operator::operator_configure,
+            operator::operator_set_root,
+            operator::operator_set_full_access,
+            operator::exec_run,
+            operator::net_fetch,
+            operator::net_search,
+            operator::search_set_key,
+            operator::search_has_key,
+            operator::search_delete_key,
+            operator::device_launch,
             devtools::detect_dev_tools,
             devtools::inspect_project,
             devtools::run_project_command,

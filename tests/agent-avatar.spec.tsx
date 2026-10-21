@@ -17,7 +17,7 @@ describe("agent avatars", () => {
       expect(screen.getByRole("img", { name: `${agent.codename} animated AI avatar` })).toBeTruthy();
       expect(container.querySelector(`.agent-avatar-${agent.id}.is-animated`)).toBeTruthy();
     }
-    expect(container.querySelectorAll("svg.agent-avatar")).toHaveLength(5);
+    expect(container.querySelectorAll("svg.agent-avatar")).toHaveLength(AGENTS.length);
   });
 
   it("supports a static avatar when animation is explicitly disabled", () => {

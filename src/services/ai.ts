@@ -8,6 +8,16 @@ import type {
   ProviderStatus,
 } from "../types/ai";
 
+/** CAMEO's main brain: STEP-5-Preview — the last model proven live-serving
+ *  on this machine's NVIDIA key (provider `nvidia`, id
+ *  `stepfun-ai/step-5-preview`). Used as the default selection when the user
+ *  has not picked a model yet. (OpenRouter GPT-5.5 Pro did not serve with the
+ *  saved key, so the default is back on the verified serving model.) */
+export const DEFAULT_BRAIN_SELECTION = {
+  provider: "nvidia",
+  model: "stepfun-ai/step-5-preview",
+} as const;
+
 const BACKEND_KEYS: Record<AIProviderId, string> = {
   openrouter: "openrouter",
   nvidia: "nvidia",
@@ -70,6 +80,14 @@ export async function streamChat(
 
 export async function cancelChat(requestId: string) {
   return invoke<boolean>("chat_cancel", { requestId });
+}
+
+/** Answer a pending agent tool approval raised by the autonomous tool loop. */
+export async function decideToolCall(approvalId: string, approved: boolean) {
+  return invoke<boolean>("chat_tool_decision", {
+    approvalId,
+    approved,
+  });
 }
 
 export function newRequestId(): string {

@@ -4,7 +4,7 @@ use keyring::Entry;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::process::Child;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -63,11 +63,6 @@ pub fn kill_all_stdio() {
 fn children_of(id: &str) -> Option<Arc<Mutex<Child>>> {
     let guard = CHILDREN.lock().expect("children registry");
     guard.as_ref().and_then(|m| m.get(id).cloned())
-}
-
-fn children_insert(id: &str, child: Child) {
-    let mut guard = CHILDREN.lock().expect("children registry");
-    guard.get_or_insert_with(HashMap::new).insert(id.to_string(), Arc::new(Mutex::new(child)));
 }
 
 fn children_remove(id: &str) {
@@ -184,13 +179,6 @@ fn peer_ms() -> i64 {
 // JSON storage helpers
 // ---------------------------------------------------------------------------
 
-fn str_vec_from(v: &Value, key: &str) -> Vec<String> {
-    v.get(key)
-        .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(Value::as_str).map(|s| s.to_string()).collect())
-        .unwrap_or_default()
-}
-
 pub fn parse_sse_stream(body: &str) -> Vec<Value> {
     // Streamable-HTTP servers may answer with text/event-stream; collect the
     // JSON payloads of `data:` lines.
@@ -209,19 +197,6 @@ pub fn parse_sse_stream(body: &str) -> Vec<Value> {
     out
 }
 
-fn first_result(messages: Vec<Value>, id: i64) -> Option<Value> {
-    messages
-        .into_iter()
-        .find(|m| m["id"] == json!(id) && m["result"].is_object() || m["result"].is_object() && m["id"] == json!(id))
-}
-
-fn first_id_result(messages: Vec<Value>, id: i64) -> Option<Value> {
-    messages
-        .into_iter()
-        .find(|m| m["id"] == json!(id))
-        .filter(|m| m["error"].as_object().is_none())
-        .map(|m| m["result"].clone())
-}
 // ---------------------------------------------------------------------------
 // Server CRUD commands
 // ---------------------------------------------------------------------------
@@ -291,7 +266,7 @@ pub fn mcp_add(
         )
         .map_err(|e| e.to_string())?;
         let _ = audit_db(&conn, "mcp", &id, "add_server", "ok", &json!({
-            "transport": transport.clone(),
+            "transport": transport,
             "stdio": if transport == "stdio" { Some(json!({"command": command.clone(), "args": args.clone(), "cwd": cwd.clone()})) } else { None },
             "url": if transport == "http" { url.clone() } else { None },
             "envNames": env.clone(),
@@ -514,23 +489,9 @@ pub fn disconnect_stdio(id: &str) {
     disable_stdio(id);
 }
 
-#[tauri::command]
-pub fn mcp_remove_named(id: String, state: State<'_, AppState>) -> Result<bool, String> {
-    mcp_remove(id, state)
-}
-
-pub use crate::commands::mcp as _mcp_self;
 // ---------------------------------------------------------------------------
 // SSRF guard — remote URLs must be public HTTPS endpoints
 // ---------------------------------------------------------------------------
-
-fn ip_is_public(b: &[u8], len: usize) -> bool {
-    match len {
-        4 => !(b[0] == 10 || b[0] == 127 || b[0] == 0 || (b[0] == 172 && (16..=31).contains(&b[1])) || (b[0] == 192 && b[1] == 168) || (b[0] == 169 && b[1] == 254) || b[0] == 100 && (64..=127).contains(&b[1]) || (b[0] == 198 && (b[1] == 18 || b[1] == 19)) || (b[0] == 203 && b[1] == 0 && b[2] == 113) || b[0] >= 240),
-        6 => !(b[0] == 0xFD && b[1] == 0x00),
-        _ => false,
-    }
-}
 
 pub fn ip_is_public_ip(ip: &std::net::IpAddr) -> bool {
     match ip {
@@ -681,7 +642,7 @@ fn stdio_jsonrpc_roundtrip(child: &mut Child, req: &Value, timeout_ms: u64) -> R
         if trimmed.is_empty() || trimmed.starts_with("Content-Length:") || trimmed.starts_with("#") {
             continue;
         }
-        let json_part = if (trimmed.starts_with('{')) {
+        let json_part = if trimmed.starts_with('{') {
             trimmed
         } else if let Some(idx) = trimmed.find('{') {
             &trimmed[idx..]

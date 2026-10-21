@@ -22,8 +22,8 @@
         "decorations": false,
         "transparent": true,
         "skipTaskbar": true,
-        "visible": false,
-        "focus": false,
+        "visible": true,
+        "focus": true,
         "backgroundColor": "#0B1020"
       }
     ],

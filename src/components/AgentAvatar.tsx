@@ -9,6 +9,9 @@ const AVATAR: Record<AgentId, { initials: string; name: string; color: string; a
   forge: { initials: "F", name: "FORGE", color: "#FB923C", accent: "#FBBF24", symbol: "⌘" },
   pixel: { initials: "P", name: "PIXEL", color: "#F472B6", accent: "#8B5CF6", symbol: "▦" },
   sentinel: { initials: "S", name: "SENTINEL", color: "#34D399", accent: "#22D3EE", symbol: "⬡" },
+  counsel: { initials: "C", name: "COUNSEL", color: "#A78BFA", accent: "#60A5FA", symbol: "§" },
+  medic: { initials: "M", name: "MEDIC", color: "#F87171", accent: "#FBBF24", symbol: "✚" },
+  ledger: { initials: "L", name: "LEDGER", color: "#FBBF24", accent: "#34D399", symbol: "₦" },
 };
 
 export default function AgentAvatar({

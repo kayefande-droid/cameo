@@ -15,6 +15,10 @@ pub struct AppState {
     pub db: Arc<Mutex<Connection>>,
     /// Cancellation flags keyed by request id, for in-flight chat streams.
     pub cancel_flags: Arc<Mutex<HashMap<String, Arc<std::sync::atomic::AtomicBool>>>>,
+    /// One-shot user decisions for in-flight agent tool approvals, keyed by
+    /// `request_id:approval_id`. Plain mutex + mpsc keeps this testable with no
+    /// extra async runtime dependency.
+    pub tool_approvals: Arc<Mutex<HashMap<String, std::sync::mpsc::Sender<bool>>>>,
 }
 
 impl AppState {
@@ -22,6 +26,7 @@ impl AppState {
         Self {
             db: Arc::new(Mutex::new(db)),
             cancel_flags: Arc::new(Mutex::new(HashMap::new())),
+            tool_approvals: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

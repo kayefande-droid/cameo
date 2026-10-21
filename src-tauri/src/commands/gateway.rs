@@ -5,7 +5,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::net::TcpListener;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tauri::State;
@@ -60,7 +60,6 @@ CREATE TABLE IF NOT EXISTS audit_events (
 pub struct GatewayState {
     pub stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub pending_auth: std::sync::Mutex<Vec<PendingAuth>>,
-    pub seq: AtomicU64,
 }
 
 #[derive(Clone)]
@@ -69,7 +68,6 @@ pub struct PendingAuth {
     pub provider: String,
     pub verifier: String,
     pub scopes: Vec<String>,
-    pub port: u16,
 }
 
 #[tauri::command]
@@ -672,7 +670,8 @@ pub fn urldecode(input: &str) -> String {
 
 #[derive(Debug)]
 enum CallbackResult {
-    Code { code: String, state: String },
+    /// `state` is validated against the pending flow before this is built.
+    Code(String),
     Denied(String),
     Failed(String),
 }
@@ -721,7 +720,7 @@ fn await_loopback_callback(port: u16, expected_state: String, auth_url: String) 
     if state != expected_state {
         return CallbackResult::Failed("authorization state mismatch - possible forgery; rejecting".into());
     }
-    CallbackResult::Code { code, state }
+    CallbackResult::Code(code)
 }
 
 fn discovery_check_google(client: &reqwest::blocking::Client) -> Result<(), String> {
@@ -881,7 +880,6 @@ pub async fn gw_oauth_connect(
             provider: provider.clone(),
             verifier: pkce.verifier.clone(),
             scopes: scopes.clone(),
-            port,
         });
     }
     {
@@ -1008,7 +1006,7 @@ fn finish_oauth_flow(
         pend.retain(|p| p.client_state != expected_state);
         drop(pend);
         match callback {
-            CallbackResult::Code { code, .. } => match flow {
+            CallbackResult::Code(code) => match flow {
                 Some(f) => StageOutcome::Code(code, f.verifier, f.scopes),
                 None => StageOutcome::Err("no in-flight authorization flow matched the callback".into(), "flow_missing".into()),
             },
@@ -1016,7 +1014,7 @@ fn finish_oauth_flow(
             CallbackResult::Failed(msg) => StageOutcome::Err(msg, "callback_failed".into()),
         }
     };
-    let (code, verifier, scopes_final) = match outcome {
+    let (code, verifier, _scopes) = match outcome {
         StageOutcome::Code(code, verifier, scopes_final) => (code, verifier, scopes_final),
         StageOutcome::Err(err, stage) => {
             let db = app.db.lock().expect("db");
@@ -1227,10 +1225,14 @@ pub async fn gw_connect_api_key(provider: String, api_key: String, gateway: Stat
         return Err(format!("provider '{provider}' uses OAuth, not an API key"));
     }
     let key = api_key.trim().to_string();
-    let key_prefix = key.chars().take(3).collect::<String>();
+    if !key.starts_with("nnda_") {
+        return Err("Render API keys start with 'nnda_' — this value looks wrong".into());
+    }
     if key.chars().count() < 16 || key.chars().count() > 256 {
         return Err("Render API keys are long IDs (nnda_…) — this value looks wrong".into());
     }
+    // Redacted prefix only (never the secret itself) for the audit trail.
+    let key_prefix = key.chars().take(5).collect::<String>();
     let p = provider.clone();
     let key_for_spawn = key.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
@@ -1796,8 +1798,15 @@ mod tests {
             for b in VAULT_PROVIDERS {
                 if a != b {
                     assert_ne!(format!("cameo_gateway_{a}"), format!("cameo_gateway_{b}"));
-                    let slots = revoke_slots(a);
-                    assert!(!slots.iter().any(|s| format!("cameo_gateway_{a}") == format!("cameo_gateway_{b}")));
+                    // Every slot a provider writes must also pass the same name
+                    // rules `vault_entry` enforces, or revoke would silently skip it.
+                    for slot in revoke_slots(a) {
+                        assert!(!slot.is_empty());
+                        assert!(
+                            slot.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'),
+                            "revoke slot '{slot}' would be rejected by vault_entry"
+                        );
+                    }
                 }
             }
         }

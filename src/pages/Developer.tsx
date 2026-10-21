@@ -14,6 +14,16 @@ import {
   type CapabilityEntry,
   type CapabilityRegistry,
 } from "../services/capabilities";
+import {
+  deviceLaunch,
+  execRun,
+  isNeedsConfirmation,
+  netFetch,
+  operatorStatus,
+  type ExecResult,
+  type FetchResult,
+  type OperatorStatus,
+} from "../services/operator";
 
 interface ToolStatus {
   id: string;
@@ -68,6 +78,18 @@ export default function Developer() {
   const [editingBody, setEditingBody] = useState("");
   const [registryError, setRegistryError] = useState<string | null>(null);
   const [registryEntries, setRegistryEntries] = useState<CapabilityEntry[] | null>(null);
+
+  const [opStatus, setOpStatus] = useState<OperatorStatus | null>(null);
+  const [opCommand, setOpCommand] = useState("");
+  const [opArgs, setOpArgs] = useState("");
+  const [opCwd, setOpCwd] = useState("");
+  const [opResult, setOpResult] = useState<ExecResult | null>(null);
+  const [opError, setOpError] = useState<string | null>(null);
+  const [opConfirm, setOpConfirm] = useState(false);
+  const [opBusy, setOpBusy] = useState(false);
+  const [fetchUrl, setFetchUrl] = useState("");
+  const [fetchResult, setFetchResult] = useState<FetchResult | null>(null);
+  const [launchTarget, setLaunchTarget] = useState("");
   const [registrySource, setRegistrySource] = useState<CapabilityRegistry["source"] | null>(null);
 
   const reloadMemory = useCallback(async () => {
@@ -118,6 +140,61 @@ export default function Developer() {
       setOutput(null);
     } catch (e) {
       setPickError(`Project pick/inspect failed: ${e}`);
+    }
+  };
+
+  useEffect(() => {
+    void operatorStatus().then(setOpStatus).catch(() => setOpStatus(null));
+  }, []);
+
+  const runOperator = async (approved: boolean) => {
+    setOpBusy(true);
+    setOpError(null);
+    setOpConfirm(false);
+    try {
+      const args = opArgs
+        .split("\n")
+        .map((a) => a.trim())
+        .filter(Boolean);
+      const res = await execRun({
+        command: opCommand.trim(),
+        args,
+        cwd: opCwd.trim() || null,
+        approved,
+      });
+      setOpResult(res);
+    } catch (e) {
+      setOpResult(null);
+      setOpError(String(e));
+      if (isNeedsConfirmation(e)) setOpConfirm(true);
+    } finally {
+      setOpBusy(false);
+    }
+  };
+
+  const runFetch = async () => {
+    setOpBusy(true);
+    setOpError(null);
+    try {
+      setFetchResult(await netFetch(fetchUrl.trim()));
+    } catch (e) {
+      setFetchResult(null);
+      setOpError(String(e));
+    } finally {
+      setOpBusy(false);
+    }
+  };
+
+  const runLaunch = async () => {
+    setOpBusy(true);
+    setOpError(null);
+    try {
+      await deviceLaunch(launchTarget.trim());
+      setOpError(null);
+    } catch (e) {
+      setOpError(String(e));
+    } finally {
+      setOpBusy(false);
     }
   };
 
@@ -260,6 +337,88 @@ export default function Developer() {
         )}
         {pickError && <div className="note danger">{pickError}</div>}
         {!hasGit && <p className="note">Tip: Git was not detected — version control safeguards in this workflow are limited.</p>}
+      </div>
+
+      <div className="card" aria-label="Operator console">
+        <h3>
+          <span className="section-title">Operator console</span>
+          <span className={`pill ${opStatus?.enabled ? "success" : "muted"}`}>
+            {opStatus?.enabled ? "autonomy on" : "autonomy off"}
+          </span>
+        </h3>
+        <p className="note" style={{ marginTop: 6 }}>
+          Runs inside {opStatus?.root ? <span className="mono">{opStatus.root}</span> : "no project root yet — set one in Settings → Autonomy"}.
+          Destructive commands are refused until you confirm them here; every attempt is audited.
+        </p>
+        <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+          <input
+            aria-label="Program"
+            placeholder="Program (e.g. git, cargo, python)"
+            value={opCommand}
+            onChange={(e) => setOpCommand(e.target.value)}
+            style={{ width: 220 }}
+          />
+          <textarea
+            aria-label="Arguments"
+            placeholder="Arguments — one per line"
+            value={opArgs}
+            onChange={(e) => setOpArgs(e.target.value)}
+            rows={2}
+            style={{ width: 260 }}
+          />
+          <input
+            aria-label="Working directory inside the project root"
+            placeholder="cwd inside root (optional)"
+            value={opCwd}
+            onChange={(e) => setOpCwd(e.target.value)}
+            style={{ width: 200 }}
+          />
+          <button className="btn small primary" onClick={() => void runOperator(false)} disabled={opBusy || !opCommand.trim()}>
+            {opBusy ? "Running…" : "Run"}
+          </button>
+        </div>
+        {opConfirm && (
+          <div className="note danger" style={{ marginTop: 8 }}>
+            That command is destructive or irreversible. Confirm to run it anyway.{" "}
+            <button className="btn small danger" onClick={() => void runOperator(true)} disabled={opBusy}>
+              Confirm and run
+            </button>
+          </div>
+        )}
+        {opError && !opConfirm && <div className="note danger" style={{ marginTop: 8 }}>{opError}</div>}
+        {opResult && (
+          <div className="log-window" style={{ marginTop: 10, color: opResult.exitCode === 0 ? "#9FD6DB" : "var(--danger)" }}>
+            {`exit code: ${opResult.exitCode} · ${opResult.durationMs}ms${opResult.timedOut ? " · timed out" : ""}${opResult.truncated ? " · output truncated" : ""}\n\n${opResult.stderr}${opResult.stdout}`}
+          </div>
+        )}
+        <hr />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <input
+            aria-label="URL to fetch"
+            placeholder="https://…"
+            value={fetchUrl}
+            onChange={(e) => setFetchUrl(e.target.value)}
+            style={{ width: 320 }}
+          />
+          <button className="btn small" onClick={() => void runFetch()} disabled={opBusy || !fetchUrl.trim()}>
+            Fetch
+          </button>
+          <input
+            aria-label="App or URL to launch"
+            placeholder="App path or https URL to launch"
+            value={launchTarget}
+            onChange={(e) => setLaunchTarget(e.target.value)}
+            style={{ width: 260 }}
+          />
+          <button className="btn small" onClick={() => void runLaunch()} disabled={opBusy || !launchTarget.trim()}>
+            Launch
+          </button>
+        </div>
+        {fetchResult && (
+          <div className="log-window" style={{ marginTop: 10, maxHeight: 220, overflowY: "auto" }}>
+            {`${fetchResult.status} ${fetchResult.contentType} · ${fetchResult.bytes} bytes${fetchResult.truncated ? " · truncated" : ""}\n\n${fetchResult.body.slice(0, 4000)}`}
+          </div>
+        )}
       </div>
 
       <div className="card" aria-label="Capability registry">

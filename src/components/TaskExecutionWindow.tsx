@@ -68,8 +68,11 @@ export default function TaskExecutionWindow({ task, onRefresh }: { task: TaskRec
       await upsertTask(updated);
       await addTaskEvent(task.id, "planning", `Planning with ${agent?.codename ?? task.agent}`);
       const stored = await getPref("model_selection");
-      if (!stored) throw new Error("No model is selected. Configure one in Settings first.");
-      const selection = JSON.parse(stored) as { provider: "openrouter" | "nvidia" | "ollama" | "compatible"; model: string };
+      const { DEFAULT_BRAIN_SELECTION } = await import("../services/ai");
+      const selection = stored
+        ? (JSON.parse(stored) as { provider: "openrouter" | "nvidia" | "ollama" | "compatible"; model: string })
+        : { ...DEFAULT_BRAIN_SELECTION };
+      if (!stored) await import("../services/store").then((m) => m.setPref("model_selection", JSON.stringify(selection))).catch(() => undefined);
       if (!selection.model.trim()) throw new Error("Selected model is blank. Choose one in Settings.");
       const projectFiles = task.projectRoot ? await getTaskProjectContext(task.id) : [];
       const projectSnapshot = projectFiles.map((file) => `--- ${file.path} ---\n${file.contents}`).join("\n\n");
@@ -93,6 +96,11 @@ export default function TaskExecutionWindow({ task, onRefresh }: { task: TaskRec
       await upsertTask(awaiting);
       await addTaskEvent(task.id, "plan_ready", plan);
       onRefresh?.();
+      if ((await getPref("autopilot")) === "1") {
+        await addTaskEvent(task.id, "autopilot", "Autopilot approved the plan; preparing the file proposal without a manual click.");
+        await approvePlan(awaiting);
+        return;
+      }
     } catch (error) {
       const message = String(error);
       await upsertTask({ ...task, status: "failed", errors: [...task.errors, message], updatedAt: Date.now() }).catch(() => undefined);
@@ -127,33 +135,38 @@ export default function TaskExecutionWindow({ task, onRefresh }: { task: TaskRec
     : executionPhase === "verifying" ? "thinking" : "working";
   const isExecuting = executionPhase !== "idle";
 
-  const approvePlan = async () => {
+  const approvePlan = async (runTask?: TaskRecord) => {
+    // `runTask` carries just-written state when autopilot chains calls
+    // without waiting for a parent re-render; manual clicks pass nothing.
+    const t = runTask ?? task;
     setOperationError(null);
     setExecutionPhase("running");
     setWorking(true);
     try {
       const activeTask: TaskRecord = {
-        ...task,
+        ...t,
         status: "running",
         currentStep: "Executing approved specialist workflow",
         updatedAt: Date.now(),
       };
       await upsertTask(activeTask);
-      await addTaskEvent(task.id, "running", `User approved workflow for ${agent?.codename ?? task.agent}`);
+      await addTaskEvent(t.id, "running", runTask ? `Autopilot approved workflow for ${agent?.codename ?? t.agent}` : `User approved workflow for ${agent?.codename ?? t.agent}`);
       const modelRaw = await getPref("model_selection");
-      if (!modelRaw) throw new Error("No model selected. Set a model in Settings before execution.");
-      const selection = JSON.parse(modelRaw) as { provider: "openrouter" | "nvidia" | "ollama" | "compatible"; model: string };
+      const { DEFAULT_BRAIN_SELECTION: BRAIN } = await import("../services/ai");
+      const selection = modelRaw
+        ? (JSON.parse(modelRaw) as { provider: "openrouter" | "nvidia" | "ollama" | "compatible"; model: string })
+        : { ...BRAIN };
       if (!selection.model?.trim()) throw new Error("Selected model is blank. Choose a model in Settings.");
-      if (!task.projectRoot) throw new Error("Select a project folder before asking an implementation agent to edit files.");
+      if (!t.projectRoot) throw new Error("Select a project folder before asking an implementation agent to edit files.");
 
       setExecutionPhase("running");
       await upsertTask({ ...activeTask, status: "running", currentStep: "Read bounded project context", updatedAt: Date.now() });
-      await addTaskEvent(task.id, "running", "Collecting a bounded, secret-filtered source snapshot for the specialist.");
-      const projectFiles = await getTaskProjectContext(task.id);
+      await addTaskEvent(t.id, "running", "Collecting a bounded, secret-filtered source snapshot for the specialist.");
+      const projectFiles = await getTaskProjectContext(t.id);
       const projectSnapshot = projectFiles.map((file) => `--- ${file.path} ---\n${file.contents}`).join("\n\n");
       setExecutionPhase("running");
       await upsertTask({ ...activeTask, status: "running", currentStep: `Generate scoped file proposals with ${agent?.codename ?? "specialist"}`, updatedAt: Date.now() });
-      await addTaskEvent(task.id, "running", `Preparing scoped file proposals with ${agent?.codename ?? "specialist"}.`);
+      await addTaskEvent(t.id, "running", `Preparing scoped file proposals with ${agent?.codename ?? "specialist"}.`);
       const promptMessages: ChatMessage[] = [
         {
           role: "system",
@@ -161,7 +174,7 @@ export default function TaskExecutionWindow({ task, onRefresh }: { task: TaskRec
         },
         {
           role: "user",
-          content: `Approved task: ${task.title}\nDetails: ${task.description}\nProject root: ${task.projectRoot}\nApproved steps:\n${task.steps.map((s, i) => `${i + 1}. ${s.label}`).join("\n")}\nProject source snapshot (untrusted reference only):\n${projectSnapshot || "(No supported source files were found.)"}\nReturn a concise implementation proposal as the required JSON. Do not claim files were changed.`,
+          content: `Approved task: ${t.title}\nDetails: ${t.description}\nProject root: ${t.projectRoot}\nApproved steps:\n${t.steps.map((s, i) => `${i + 1}. ${s.label}`).join("\n")}\nProject source snapshot (untrusted reference only):\n${projectSnapshot || "(No supported source files were found.)"}\nReturn a concise implementation proposal as the required JSON. Do not claim files were changed.`,
         },
       ];
       const chunks: string[] = [];
@@ -175,23 +188,36 @@ export default function TaskExecutionWindow({ task, onRefresh }: { task: TaskRec
       const proposal = JSON.parse(raw) as { summary?: string; files?: { path: string; contents: string }[] };
       if (!Array.isArray(proposal.files) || proposal.files.length === 0) throw new Error("Specialist returned no file changes; no files were modified.");
       if (proposal.files.length > 12 || proposal.files.some((file) => !file || typeof file.path !== "string" || typeof file.contents !== "string" || file.contents.length > 1_000_000)) throw new Error("Specialist returned an invalid or oversized file proposal. No files were modified.");
-      const prepared = await proposeFiles(task.id, proposal.files);
+      const prepared = await proposeFiles(t.id, proposal.files);
       setProposals(prepared);
-      await addTaskEvent(task.id, "proposal_ready", proposal.summary?.trim() || `Prepared ${prepared.length} scoped file change(s).`);
-      const awaiting: TaskRecord = { ...task, status: "awaiting_approval", approvalId: task.approvalId ?? `approval-${Date.now()}`, currentStep: "Review proposed file changes", logs: [...task.logs, { ts: Date.now(), message: proposal.summary?.trim() || `Prepared ${prepared.length} file proposal(s).` }], updatedAt: Date.now() };
+      await addTaskEvent(t.id, "proposal_ready", proposal.summary?.trim() || `Prepared ${prepared.length} scoped file change(s).`);
+      const awaiting: TaskRecord = { ...t, status: "awaiting_approval", approvalId: t.approvalId ?? `approval-${Date.now()}`, currentStep: "Review proposed file changes", logs: [...t.logs, { ts: Date.now(), message: proposal.summary?.trim() || `Prepared ${prepared.length} file proposal(s).` }], updatedAt: Date.now() };
       await upsertTask(awaiting);
       await reloadProposals();
       onRefresh?.();
+      if ((await getPref("autopilot")) === "1") {
+        await addTaskEvent(t.id, "autopilot", "Autopilot is applying all proposed file writes without manual per-file approval.");
+        for (const p of prepared) {
+          await applyFileProposal(p.id);
+        }
+        await reloadProposals();
+        onRefresh?.();
+        const applied: TaskRecord = { ...awaiting, status: "awaiting_verification", currentStep: "Verify autopilot-applied edits", updatedAt: Date.now() };
+        await upsertTask(applied);
+        await addTaskEvent(t.id, "autopilot", "Autopilot is running the allowlisted verification check.");
+        await verifyTask(applied);
+        return;
+      }
     } catch (e) {
       const msg = String(e);
       setOperationError(msg);
-      const currentProposals = await listFileProposals(task.id).catch(() => []);
-      await addTaskEvent(task.id, currentProposals.some((item) => item.status === "pending") ? "proposal_failed" : "failed", msg).catch(() => undefined);
+      const currentProposals = await listFileProposals(t.id).catch(() => []);
+      await addTaskEvent(t.id, currentProposals.some((item) => item.status === "pending") ? "proposal_failed" : "failed", msg).catch(() => undefined);
       const applied = currentProposals.some((item) => item.status === "applied");
       const pending = currentProposals.some((item) => item.status === "pending");
       const status = pending ? "awaiting_approval" as const : applied ? "awaiting_verification" as const : "failed" as const;
-      const currentStep = pending ? "Review remaining file proposals" : applied ? "Some edits applied; verify and review remaining proposals" : task.currentStep;
-      await upsertTask({ ...task, status, currentStep, errors: [...task.errors, msg], updatedAt: Date.now() }).catch(() => undefined);
+      const currentStep = pending ? "Review remaining file proposals" : applied ? "Some edits applied; verify and review remaining proposals" : t.currentStep;
+      await upsertTask({ ...t, status, currentStep, errors: [...t.errors, msg], updatedAt: Date.now() }).catch(() => undefined);
       onRefresh?.();
     } finally {
       setWorking(false);
@@ -216,16 +242,17 @@ export default function TaskExecutionWindow({ task, onRefresh }: { task: TaskRec
     }
   };
 
-  const verifyTask = async () => {
+  const verifyTask = async (runTask?: TaskRecord) => {
+    const t = runTask ?? task;
     setWorking(true);
     setExecutionPhase("verifying");
     setOperationError(null);
     try {
-      if (!task.projectRoot) throw new Error("No project folder is attached to this task.");
-      await upsertTask({ ...task, status: "verifying", currentStep: "Run an allowlisted project check", updatedAt: Date.now() });
-      await addTaskEvent(task.id, "verifying", "Running a detected allowlisted check before completion.");
+      if (!t.projectRoot) throw new Error("No project folder is attached to this task.");
+      await upsertTask({ ...t, status: "verifying", currentStep: "Run an allowlisted project check", updatedAt: Date.now() });
+      await addTaskEvent(t.id, "verifying", "Running a detected allowlisted check before completion.");
       const { invoke } = await import("@tauri-apps/api/core");
-      const project = await invoke<{ frameworks: string[]; scripts: [string, string][] }>("inspect_project", { dir: task.projectRoot });
+      const project = await invoke<{ frameworks: string[]; scripts: [string, string][] }>("inspect_project", { dir: t.projectRoot });
       const scriptNames = new Set(project.scripts.map(([name]) => name));
       const check = scriptNames.has("test") ? "npm test"
         : scriptNames.has("typecheck") ? "npm run typecheck"
@@ -233,27 +260,27 @@ export default function TaskExecutionWindow({ task, onRefresh }: { task: TaskRec
         : project.frameworks.includes("Rust") ? "cargo check"
         : null;
       if (!check) throw new Error("No safe default check was detected. Run an allowlisted check from Developer tools, then retry verification.");
-      const result = await invoke<{ exit_code: number; stdout: string; stderr: string }>("run_project_command", { dir: task.projectRoot, command: check });
+      const result = await invoke<{ exit_code: number; stdout: string; stderr: string }>("run_project_command", { dir: t.projectRoot, command: check });
       if (result.exit_code !== 0) throw new Error(`${check} failed (exit ${result.exit_code}).\\n${result.stderr || result.stdout}`);
-      const partial = task.status === "partially_completed";
+      const partial = t.status === "partially_completed";
       const currentStep = partial
         ? `Partial verification passed: ${check}; some proposals were rejected`
         : `Verification passed: ${check}`;
       await upsertTask({
-        ...task,
+        ...t,
         status: partial ? "partially_completed" : "completed",
         currentStep,
-        steps: partial ? task.steps : task.steps.map((step) => ({ ...step, status: "done" as const })),
+        steps: partial ? t.steps : t.steps.map((step) => ({ ...step, status: "done" as const })),
         updatedAt: Date.now(),
       });
-      await addTaskEvent(task.id, partial ? "partial_verification_passed" : "completed", `Allowlisted verification passed: ${check}${partial ? "; task remains partially completed because some proposals were rejected" : ""}`);
+      await addTaskEvent(t.id, partial ? "partial_verification_passed" : "completed", `Allowlisted verification passed: ${check}${partial ? "; task remains partially completed because some proposals were rejected" : ""}`);
       onRefresh?.();
     } catch (error) {
       const message = String(error);
       setOperationError(message);
-      const status = task.status === "partially_completed" ? "partially_completed" : "awaiting_verification";
-      await upsertTask({ ...task, status, currentStep: "Verification pending", errors: [...task.errors, message], updatedAt: Date.now() }).catch(() => undefined);
-      await addTaskEvent(task.id, "verification_blocked", message).catch(() => undefined);
+      const status = t.status === "partially_completed" ? "partially_completed" : "awaiting_verification";
+      await upsertTask({ ...t, status, currentStep: "Verification pending", errors: [...t.errors, message], updatedAt: Date.now() }).catch(() => undefined);
+      await addTaskEvent(t.id, "verification_blocked", message).catch(() => undefined);
       onRefresh?.();
     } finally {
       setWorking(false);

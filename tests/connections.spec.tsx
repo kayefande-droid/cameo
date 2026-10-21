@@ -78,12 +78,12 @@ describe("Connections page", () => {
     await screen.findByText("Render.com");
     const card = screen.getAllByText("Render.com")[0].closest(".card") as HTMLElement;
     const input = card.querySelector("input[type=password]") as HTMLInputElement;
-    fireEvent.change(input, { target: { value: "rnd_abcdefghij0123456789" } });
+    fireEvent.change(input, { target: { value: "nnda_abcdefghij0123456789" } });
     const buttons = Array.from(card.querySelectorAll("button"));
     const save = buttons.find((b) => b.textContent === "Save & test") as HTMLButtonElement;
     fireEvent.click(save);
     await waitFor(() =>
-      expect(invocations.some((i) => i.cmd === "gw_connect_api_key" && (i.args as { apiKey?: string })?.apiKey === "rnd_abcdefghij0123456789")).toBe(true),
+      expect(invocations.some((i) => i.cmd === "gw_connect_api_key" && (i.args as { apiKey?: string })?.apiKey === "nnda_abcdefghij0123456789")).toBe(true),
     );
   });
 

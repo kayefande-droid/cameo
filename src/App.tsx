@@ -83,10 +83,31 @@ export default function App() {
       const stored = await getPref("model_selection");
       if (stored) {
         try {
-          setSelection(JSON.parse(stored) as ModelSelection);
+          const current = JSON.parse(stored) as ModelSelection;
+          // Migrate prior default brains to the verified serving model.
+          // A hand-picked model is never touched.
+          if (
+            (current.provider === "nvidia" && current.model === "deepseek-ai/deepseek-r1") ||
+            (current.provider === "openrouter" && current.model === "deepseek/deepseek-r1") ||
+            (current.provider === "openrouter" && current.model === "openai/gpt-5.5-pro")
+          ) {
+            const { DEFAULT_BRAIN_SELECTION } = await import("./services/ai");
+            const brain: ModelSelection = { ...DEFAULT_BRAIN_SELECTION };
+            setSelection(brain);
+            await setPref("model_selection", JSON.stringify(brain)).catch(() => undefined);
+          } else {
+            setSelection(current);
+          }
         } catch {
           /* ignore malformed preference */
         }
+      } else {
+        // First run: default the main brain to the verified serving model
+        // (STEP-5-Preview on NVIDIA) so agents answer immediately.
+        const { DEFAULT_BRAIN_SELECTION } = await import("./services/ai");
+        const brain: ModelSelection = { ...DEFAULT_BRAIN_SELECTION };
+        setSelection(brain);
+        await setPref("model_selection", JSON.stringify(brain)).catch(() => undefined);
       }
       setSelectionLoaded(true);
     })();

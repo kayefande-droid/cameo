@@ -2,7 +2,9 @@
 
 **Cognitive Autonomous Machine Executive Operator** — one intelligence, multiple agents, complete control.
 
-CAMEO is a Windows desktop AI assistant built with Tauri 2, React, TypeScript, and Rust. It opens as a compact floating dock, horizontally centered near the top of the primary display below the webcam area. Shrink it to a small animated orb, expand it to the dock, or expand again to the full workspace. The dock has a page selector so Settings and all other panels remain accessible without opening the full workspace. The Agents page displays five distinct animated AI avatars; motion is decorative and does not claim an agent is running.
+CAMEO is a Windows desktop AI assistant built with Tauri 2, React, TypeScript, and Rust. It opens as a compact floating dock, horizontally centered near the top of the primary display below the webcam area. Shrink it to a small animated orb, expand it to the dock, or expand again to the full workspace. The dock has a page selector so Settings and all other panels remain accessible without opening the full workspace. The Agents page displays eight distinct animated AI avatars; motion is decorative and does not claim an agent is running.
+
+**New here? Follow [docs/SETUP.md](docs/SETUP.md) — it walks through install, provider keys, agent switching and the autonomy settings.**
 
 ## Windows setup
 
@@ -16,7 +18,7 @@ npm install
 npm run tauri dev
 ```
 
-The app opens as a small animated orb centered near the top of the primary screen, directly below the webcam. Click the orb to expand to the compact dock, use **−** to shrink back to the orb, and use **⤢** to expand the dock to the full workspace; use **◔** to return to the dock. Drag the logo/header area to reposition it; the center-top control snaps it below the webcam again. The pin button controls always-on-top. The dock page selector provides access to Chat, Tasks, Agents, Developer, Browser, Proxy, Camera, Voice, Power, Settings, and About. The Agents page shows all five distinct animated avatars.
+The app opens as a small animated orb centered near the top of the primary screen, directly below the webcam. Click the orb to expand to the compact dock, use **−** to shrink back to the orb, and use **⤢** to expand the dock to the full workspace; use **◔** to return to the dock. Drag the logo/header area to reposition it; the center-top control snaps it below the webcam again. The pin button controls always-on-top. The dock page selector provides access to Chat, Tasks, Agents, Developer, Browser, Proxy, Camera, Voice, Power, Settings, and About. The Agents page shows all eight distinct animated avatars.
 
 ### Install the packaged application
 

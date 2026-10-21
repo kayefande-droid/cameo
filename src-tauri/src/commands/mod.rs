@@ -3,6 +3,7 @@ pub mod browser;
 pub mod devtools;
 pub mod gateway;
 pub mod mcp;
+pub mod operator;
 pub mod power;
 pub mod store;
 pub mod window;

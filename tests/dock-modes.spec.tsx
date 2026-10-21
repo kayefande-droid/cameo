@@ -86,7 +86,16 @@ describe("floating CAMEO assistant", () => {
       expect.arrayContaining([
         expect.objectContaining({ role: "user", content: "Hello from the dock" }),
       ]),
-      { max_tokens: 2048 },
+      {
+        max_tokens: 2048,
+        // Agent tools + safe auto-approve are on by default so the dock
+        // assistant acts without a click per step (destructive actions
+        // still pause for approval).
+        agent_tools: true,
+        agent_max_rounds: 4,
+        agent_auto_approve_safe: true,
+        agent_auto_approve_all: false,
+      },
       expect.any(Function),
       "test-request",
     );

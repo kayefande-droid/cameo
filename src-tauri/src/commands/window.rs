@@ -54,9 +54,11 @@ pub async fn set_window_mode(app: AppHandle<Wry>, mode: String) -> Result<(), St
     let min = tauri::LogicalSize::new(min_width, min_height);
     let _ = scale;
 
-    // Focusability is switched explicitly for the panel only. In idle dock mode,
-    // Windows does not activate this topmost tool window when it is clicked.
-    let _ = win.set_focusable(mode == "panel" || mode == "full");
+    // The window stays focusable in every mode so clicks always activate it
+    // and keystrokes reach the chat/operator inputs. (Previously dock mode was
+    // non-focusable, which left the panel open but untypable: the window never
+    // activated, so the WebView never received keyboard events.)
+    let _ = win.set_focusable(true);
     // Respect the saved pin preference in all compact modes.
     let _ = win.set_always_on_top(pinned_default(&app));
     let _ = win.set_skip_taskbar(compact);
