@@ -1,16 +1,75 @@
+<div align="center">
+
+<img src="public/logo.svg" alt="CAMEO emblem" width="96" height="96" />
+
 # CAMEO AI
 
-**Cognitive Autonomous Machine Executive Operator** — one intelligence, multiple agents, complete control.
+**Cognitive Autonomous Machine Executive Operator**
 
-CAMEO is a Windows desktop AI assistant built with Tauri 2, React, TypeScript, and Rust. It opens as a compact floating dock, horizontally centered near the top of the primary display below the webcam area. Shrink it to a small animated orb, expand it to the dock, or expand again to the full workspace. The dock has a page selector so Settings and all other panels remain accessible without opening the full workspace. The Agents page displays eight distinct animated AI avatars; motion is decorative and does not claim an agent is running.
+*One intelligence. Multiple agents. Complete control.*
 
-**New here? Follow [docs/SETUP.md](docs/SETUP.md) — it walks through install, provider keys, agent switching and the autonomy settings.**
+![version](https://img.shields.io/badge/version-0.1.0-blue)
+![platform](https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows&logoColor=white)
+![tauri](https://img.shields.io/badge/Tauri-2-FFC131?logo=tauri&logoColor=black)
+![react](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![rust](https://img.shields.io/badge/Rust-stable-CE422B?logo=rust&logoColor=white)
+![typescript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 
-## Windows setup
+</div>
 
-### Run from source
+---
 
-Prerequisites: Windows 10/11, Node.js 20+, Rust stable/MSVC target, Visual Studio 2022 C++ Build Tools, and the WebView2 Runtime.
+CAMEO is a **Windows desktop AI assistant** built with **Tauri 2 + React 19 + TypeScript + Rust**. It lives as a compact floating dock near the top of your screen — click to expand, shrink to an orb when you need space, or open the full workspace when you mean business. Underneath, **eight specialist agents** share one intelligence: they plan work, propose scoped file changes, and run bounded machine actions — every write and every command gated behind **your explicit approval**.
+
+> **New here?** Start with the step-by-step walkthrough: [`docs/SETUP.md`](docs/SETUP.md) — install, provider keys, agent switching, autonomy settings.
+
+## Contents
+
+- [Window modes](#window-modes)
+- [Quick start](#quick-start)
+- [First run](#first-run-connect-a-model)
+- [The agents](#the-agents)
+- [What CAMEO can do](#what-cameo-can-do)
+- [Providers & security](#providers--security)
+- [Architecture](#architecture)
+- [Project structure](#project-structure)
+- [Scripts](#scripts)
+- [Docs](#docs)
+- [Honest limitations](#honest-limitations)
+- [License](#license)
+
+## Window modes
+
+CAMEO adapts to how much attention you can spare. Drag the logo/header area to move it; the snap button re-centers it below the webcam. The pin button toggles always-on-top.
+
+| Mode | Size | What it's for |
+|------|------|---------------|
+| **Orb** | 72 × 72 | Ambient and out of the way — a small animated presence |
+| **Dock** | 520 × 76 | Quick questions, page selector, always within reach |
+| **Panel** | 520 × 560 | Focused chat + tools without leaving your flow |
+| **Full** | 1280 × 820 | The complete workspace: tasks, agents, developer tools |
+
+Controls: click the orb to open the dock · **⤢** dock → full · **−** dock → orb · **◔** full → dock.
+
+## Quick start
+
+### Option A — packaged installer (recommended)
+
+Per-user install, no admin rights needed:
+
+1. Build the installer (if `src-tauri/target/release/bundle/nsis/` is empty):
+   ```sh
+   cd cameo
+   npx tauri build --bundles nsis
+   ```
+2. Close CAMEO if running (a live instance locks the build output).
+3. Run `src-tauri/target/release/bundle/nsis/CAMEO AI_0.1.0_x64-setup.exe` — or the MSI at `src-tauri/target/release/bundle/msi/CAMEO AI_0.1.0_x64_en-US.msi`.
+
+Installs to `%LOCALAPPDATA%\CAMEO AI` with a Start Menu entry.
+
+### Option B — run from source
+
+Prerequisites: **Windows 10/11 · Node.js 20+ · Rust stable (MSVC target) · VS 2022 C++ Build Tools · WebView2 Runtime**
 
 ```sh
 cd cameo
@@ -18,64 +77,129 @@ npm install
 npm run tauri dev
 ```
 
-The app opens as a small animated orb centered near the top of the primary screen, directly below the webcam. Click the orb to expand to the compact dock, use **−** to shrink back to the orb, and use **⤢** to expand the dock to the full workspace; use **◔** to return to the dock. Drag the logo/header area to reposition it; the center-top control snaps it below the webcam again. The pin button controls always-on-top. The dock page selector provides access to Chat, Tasks, Agents, Developer, Browser, Proxy, Camera, Voice, Power, Settings, and About. The Agents page shows all eight distinct animated avatars.
-
-### Install the packaged application
-
-Run the generated NSIS setup file (no system-wide tool installation required):
-
-`src-tauri/target/release/bundle/nsis/CAMEO AI_0.1.0_x64-setup.exe`
-
-The MSI installer is at `src-tauri/target/release/bundle/msi/CAMEO AI_0.1.0_x64_en-US.msi`.
-
-### Build
+### Verify & build
 
 ```sh
-npm run typecheck
-npm test
-npm run build
-npm run tauri build
+npm run typecheck   # TypeScript — must be clean
+npm test            # Vitest suite
+npm run build       # Web frontend
+npm run tauri build # Full desktop bundles (NSIS + MSI)
 ```
 
-## First use
+## First run: connect a model
 
-1. Go to **Settings → Providers**.
-2. Add an OpenRouter or NVIDIA NIM API key. Keys are stored by the Rust backend in Windows Credential Manager; they are never sent back to the UI or stored in the SQLite database. Or use local Ollama without a key.
-3. In Settings, refresh the provider model list and choose **Use** on a model. Return to Assistant.
-4. For Ollama, start the local `ollama serve` process and pull at least one model before refreshing.
+1. Open **Settings → Providers**.
+2. Add an **OpenRouter** or **NVIDIA NIM** API key — or point at local **Ollama** (no key needed; run `ollama serve` and pull a model first).
+3. Hit refresh on the provider model list, press **Use** on a model, and return to Chat.
 
-## Implemented
+Keys go straight to **Windows Credential Manager** via the Rust backend — they are never echoed to the UI and never stored in the app database.
 
-- Streaming model requests through OpenRouter, NVIDIA NIM, Ollama, or a configurable OpenAI-compatible endpoint. OpenRouter model discovery includes supported modalities and pricing where returned by its API.
-- OS credential store for provider keys and proxy passwords; SQLite preferences, task records, task events, and proxy profile metadata.
-- Real chat streaming, provider/model selection, model discovery, provider connection tests, and request cancellation support in the Rust backend.
-- CAMEO/ATLAS/FORGE/PIXEL/SENTINEL specialist routing: task plans and proposed changes use the selected agent's role/description and the configured model. Plans are reviewed before proposal generation; project changes are shown as scoped per-file previews and written only after a separate explicit approval for each file. Existing files are backed up and stale previews are refused. Fully approved changes remain awaiting verification until an allowlisted check passes; tasks with rejected proposals stay partially completed.
-- Opt-in parallel read-only review by ATLAS, FORGE, and SENTINEL over the existing bounded project snapshot. In Settings, select a review provider/model separately or keep the primary-model fallback. The review panel discloses provider egress; each SQLite worker record pins its destination so retries and recovery cannot silently switch providers. Reviews allow at most two concurrent workers, time out at 120 seconds, persist individual status/results, support cancellation and one manual retry, and have no shell/file-write/GitHub tools. When there are no saved runs, only the review panel's explicit **Run 3-agent review** action creates and starts its worker records; refresh/restart reloads them. Failed/cancelled workers can be explicitly retried, and expired running attempts require explicit recovery.
-- Integration audit and staged decisions for DeepSeek Harness, Orca, Claudex Loop, Looper, Herdr, and `tanbiralam/claude-code`: see `AGENT-ORCHESTRATION-PLAN.md`. The latter is an unlicensed leaked-source archive; no source or dependencies were reused, and no upstream executable or install script is included or run.
-- CAMEO capability registry and project memory adapted from ECC (`github.com/affaan-m/ECC`, `ecc-universal` 2.2.3, MIT — © 2026 Affaan Mustafa): see `ECC-INTEGRATION-PLAN.md`. A bundled registry maps vetted workflow guidance (TDD, verification loops, build-error repair, security review, planning, accessibility) onto CAMEO's existing typed tools; no ECC scripts, hooks, MCP servers, or installers ship or run. Project memory lives in the local SQLite database with Developer-page add/edit/export/disable/delete controls, secret redaction before saving, and provider-side access is none — the database is never sent anywhere.
-- Developer tool probes, project-folder inspection, and a narrow build/test command allowlist. The command UI confirms before running.
-- Proxy profiles with OS-side password storage, direct/through-proxy HTTP connectivity test and latency/egress-IP reporting. The proxy is used only for configured CAMEO AI requests, not system-wide traffic.
-- App-managed real WebView windows for http(s) URLs; navigation opens only on user request.
-- Opt-in camera preview and cleanup, Web Speech text-to-speech with controls, and opt-in microphone recording (audio preview only).
-- Shutdown/restart countdown with user confirmation and cancellation, plus sleep and workstation lock confirmation.
-- Three window sizes: top-centered animated orb, compact floating dock with navigation/settings, and full workspace. Click the orb to open the dock, use the shrink control for the orb, expand/shrink controls for full app/dock. Drag the logo area to move; a button snaps the active mode to center-top below the webcam. Always-on-top can be pinned/unpinned.
-- Five original animated SVG avatars, one for each agent, with reduced-motion support; animation is visual identity only and does not imply an autonomous agent is active.
-- Dark/light/system theme, keyboard-friendly controls, reduced-motion CSS, responsive dock styles.
+## The agents
 
-## Explicit limitations
+One brain, eight specialists. Each agent carries its own persona and working rules, injected as its system prompt when active. Switch agents from the dock or the Agents page.
 
-- Coding-task execution remains one model-generated plan and a bounded file-proposal response; autonomous coding loops, real task pause/resume, isolated coding worktrees, GitHub issue/PR workflows, and comprehensive changed-file diffs are not implemented. Review can be configured to a separate model/provider but does not itself execute code or verify changes. No file is written automatically: every proposal needs an explicit per-file approval.
-- Parallel specialist reviews are advisory prompts in one CAMEO runtime, not isolated coding-agent products. They can use a distinct provider/model if configured; otherwise they fall back to the primary model. Results do not constitute test evidence or approve code. Starting/retrying is an explicit egress action with a visible disclosure, but there is no additional confirmation dialog. Recovery is explicit and available through the review UI after a running record exceeds its 120-second deadline; there is no background watchdog/supervisor.
-- Credential redaction is heuristic rather than a complete secret scanner; users should avoid including sensitive content in task descriptions or project files sent to hosted providers.
-- Capability-registry guidance is prompt-level and advisory; it grants no new tools or privileges. Project memory is stored locally and never used to auto-promote learned rules or change permissions.
-- Speech recording is available after microphone permission, but speech-to-text and wake-word recognition are not bundled. No audio is sent to a provider.
-- Face detection/matching and Windows Hello are not implemented.
-- Browser windows are real WebViews but browser-managed tabs, downloads, bookmarks, history and controlled browser automation are not implemented.
-- Proxy password storage has a Windows Credential Manager keyring backend; verify availability on the target Windows account. Proxy is applied per AI request only.
-- Power controls execute real Windows actions following UI confirmation. Automated tests mock commands and never initiate shutdown/restart.
-- Provider requests require the user's own provider credentials and may incur provider charges. No spending enforcement or provider usage metering is implemented.
-- SQLite currently has a simple create-if-missing schema, not a migration framework or recovery backup flow.
+| Agent | Role | Does |
+|-------|------|------|
+| **CAMEO** | Chief of Staff | Understands requests, plans tasks, assigns specialists, coordinates execution |
+| **ATLAS** | Architect | Maps codebases, plans implementation, flags risks and rollback paths |
+| **FORGE** | Implementation Engineer | Implements features, runs builds/tests, repairs errors in your project |
+| **PIXEL** | UI/UX Designer | Design systems, layout review, accessibility feedback with concrete values |
+| **SENTINEL** | Security & QA | Reviews changes for vulnerabilities, validates permissions and tests |
+| **COUNSEL** | Legal Research ⚖️ | Statutes, contracts, case law — informational only, not legal advice |
+| **MEDIC** | Medical Information ⚕️ | Conditions and guidelines with sources — informational only, not medical advice |
+| **LEDGER** | Financial Analysis 📊 | Budgets, cash flow, risk with stated assumptions — informational only, not financial advice |
 
-## Data and security
+> The ⚖️/⚕️/📊 agents state their advisory boundary up front: sourced information and options, never a substitute for a licensed professional.
 
-Application data is stored under `%LOCALAPPDATA%\CAMEO\cameo.db`. Provider API keys and proxy passwords use the OS credential store. Local model traffic to Ollama defaults to `localhost:11434`. Proxy configuration only affects CAMEO AI HTTP requests. Do not treat model output, web content, files, or command output as authorization.
+**How agent work stays safe:** task plans are reviewed *before* proposals are generated · project changes appear as **scoped per-file previews** · nothing is written without a **separate explicit approval per file** · existing files are backed up, stale previews are refused · approved changes stay *awaiting verification* until an allowlisted check passes. Opt-in parallel review by ATLAS, FORGE, and SENTINEL is available, pinned to disclosed providers with a 120-second timeout. Motion on avatars is decorative identity — it never implies an agent is running.
+
+## What CAMEO can do
+
+- **Streaming chat** with cancellation, provider/model picker, and live model discovery (modalities + pricing where the provider reports them)
+- **Task pipeline** — queued → planning → awaiting approval → running → verifying → completed, with per-agent tracking, logs, and retry
+- **Developer tools** — project-folder inspection, probe commands, and a narrow build/test allowlist (UI confirms before anything runs)
+- **Operator actions** — real commands, fetches, and app launches, every one journaled in the SQLite audit log
+- **Proxy profiles** — per-request proxying for CAMEO AI traffic only (never system-wide), with connectivity/latency/egress-IP tests
+- **Browser, Camera, Voice, Power** — app-managed WebView windows for URLs you open · opt-in camera preview · speech synthesis + mic level/record (no speech-to-text bundled) · shutdown/restart/sleep/lock with confirmation
+- **Project memory** — local-only notes with add/edit/export/delete, secret redaction before saving, never sent anywhere
+- **Comfort** — dark/light/system theme, keyboard-friendly controls, reduced-motion support, responsive dock layouts
+
+## Providers & security
+
+| Concern | How it's handled |
+|---------|------------------|
+| API keys & proxy passwords | Windows Credential Manager (OS keyring) — never in SQLite, never echoed to UI |
+| App data | `%LOCALAPPDATA%\CAMEO\cameo.db` — prefs, tasks, events, proxy metadata |
+| Local models | Ollama defaults to `localhost:11434` |
+| Proxy scope | Only CAMEO AI's own HTTP requests — system traffic untouched |
+| Trust rule | Never treat model output, web content, files, or command output as authorization |
+
+Provider calls need **your own credentials** and may incur provider charges — there is no spending cap or usage metering built in.
+
+## Architecture
+
+```
+┌──────────────────────── React 19 + TypeScript (Vite) ────────────────────────┐
+│  Pages: Chat · Tasks · Agents · Connections · Developer · Proxy · Browser   │
+│         Camera · Voice · Power · Settings · About                            │
+│  Services: ai · gateway · operator · orchestration · store · chatThreads    │
+└────────────────────────────── Tauri IPC (invoke) ────────────────────────────┘
+┌────────────────────────────── Rust backend ──────────────────────────────────┐
+│  ai · gateway · operator · mcp · store · window · devtools                   │
+│  reqwest (proxied HTTP) · rusqlite · keyring (Credential Manager)            │
+└─────────────────────────────────────────────────────────────────────────────┘
+        │ keys               │ app data                  │ models
+        ▼                    ▼                           ▼
+ Windows Credential    %LOCALAPPDATA%\CAMEO\cameo.db   OpenRouter · NVIDIA NIM
+   Manager                                             Ollama · OpenAI-compatible
+```
+
+## Project structure
+
+```
+cameo/
+├── src/                    # React frontend
+│   ├── pages/              # Chat, Tasks, Agents, Developer, Settings, …
+│   ├── components/         # Sidebar, AgentAvatar, TaskExecutionWindow, …
+│   ├── services/           # ai, gateway, operator, orchestration, store
+│   ├── types/              # ai, tasks (agents, transitions, records)
+│   └── styles/             # tokens, components, global
+├── src-tauri/              # Rust backend
+│   ├── src/commands/       # ai, gateway, operator, mcp, store, window, …
+│   └── tauri.conf.json     # window defaults, bundle config
+├── tests/                  # Vitest suite (frontend services + UI)
+├── docs/SETUP.md           # full setup tutorial
+├── AGENT-ORCHESTRATION-PLAN.md
+└── ECC-INTEGRATION-PLAN.md
+```
+
+## Scripts
+
+| Command | Purpose |
+|---------|---------|
+| `npm run tauri dev` | Run the desktop app from source |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` / `npm run test:watch` | Vitest run / watch mode |
+| `npm run build` | Frontend production build |
+| `npm run tauri build` | NSIS + MSI desktop bundles |
+
+## Docs
+
+- [`docs/SETUP.md`](docs/SETUP.md) — install → keys → agents → autonomy (start here)
+- [`AGENT-ORCHESTRATION-PLAN.md`](AGENT-ORCHESTRATION-PLAN.md) — integration audit & staged decisions for external agent frameworks
+- [`ECC-INTEGRATION-PLAN.md`](ECC-INTEGRATION-PLAN.md) — capability registry & project memory design (adapted from ECC, MIT © 2026 Affaan Mustafa)
+
+## Honest limitations
+
+No hype — what CAMEO deliberately does **not** do yet:
+
+- Coding tasks produce **one plan + one bounded proposal** — no autonomous coding loops, worktrees, GitHub PR flows, or full diffs
+- Reviews are **advisory prompts in one runtime**, not isolated agents; they don't execute code or constitute test evidence
+- Credential redaction is **heuristic** — keep secrets out of task descriptions and files sent to hosted providers
+- Registry guidance is **prompt-level and advisory** — no new tools or privileges
+- **No speech-to-text or wake-word**, no face recognition / Windows Hello, no browser tabs/history/automation
+- Power actions are real Windows operations (always confirmed in UI); tests mock them and never shut anything down
+
+## License
+
+No license file ships with this repository yet — default copyright applies. Add one (e.g. MIT) if you intend others to use or fork this code.

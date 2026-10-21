@@ -98,6 +98,8 @@ export default function Chat({
   onRequestChange,
   onAudioLevel,
   onListeningChange,
+  hideComposer = false,
+  injectedPrompt = null,
 }: {
   selection: ModelSelection | null;
   onSelectionChange: (sel: ModelSelection) => void;
@@ -106,6 +108,10 @@ export default function Chat({
   onRequestChange?: (requestId: string | null) => void;
   onAudioLevel?: (level: number) => void;
   onListeningChange?: (listening: boolean) => void;
+  /** Hide the composer row (the host shell provides its own composer). */
+  hideComposer?: boolean;
+  /** External prompt to send (or queue into the composer when busy). */
+  injectedPrompt?: { key: number; text: string } | null;
 }) {
   const [provider, setProvider] = useState<AIProviderId>(selection?.provider ?? "openrouter");
   const [model, setModel] = useState<string>(selection?.model ?? "");
@@ -407,8 +413,8 @@ export default function Chat({
     if (scrollRafRef.current !== null) window.cancelAnimationFrame(scrollRafRef.current);
   }, []);
 
-  const send = useCallback(async () => {
-    const promptText = input.trim();
+  const send = useCallback(async (textOverride?: string) => {
+    const promptText = (textOverride ?? input).trim();
     const text = [promptText, ...attachments.map((file) => `Attached file: ${file.name}\n\`\`\`\n${file.text}\n\`\`\``)].filter(Boolean).join("\n\n");
     if (!text || busy || !selection) {
       if (!selection) setError("Choose a provider and model in Settings first.");
@@ -540,6 +546,27 @@ export default function Chat({
       onRequestChange?.(null);
     }
   }, [activeAgent, agentMode, attachments, autoApproveSafe, autopilot, busy, flushPending, input, onRequestChange, scheduleFlush, selection, turns]);
+
+  // External prompts (e.g. the dock shell composer) send straight away when
+  // idle; when a response is still streaming the text is queued in the
+  // composer instead of being dropped, so nothing the user sent is lost.
+  const sendRef = useRef(send);
+  useEffect(() => {
+    sendRef.current = send;
+  });
+  const busyRef = useRef(false);
+  useEffect(() => {
+    busyRef.current = busy;
+  });
+  const lastPromptKeyRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!injectedPrompt || lastPromptKeyRef.current === injectedPrompt.key) return;
+    lastPromptKeyRef.current = injectedPrompt.key;
+    const text = injectedPrompt.text.trim();
+    if (!text) return;
+    if (busyRef.current) setInput(text);
+    else void sendRef.current(text);
+  }, [injectedPrompt]);
 
   /** Hands-free mode: agents run every tool (including destructive/device
    *  actions) without approval clicks, and tasks auto-advance through plan →
@@ -890,6 +917,7 @@ export default function Chat({
           setConfirmingDeleteId={setConfirmingDeleteId}
         />
       )}
+      {!hideComposer && (
       <div className="chat-input-row">
         {compact && <label className="assistant-attach-button" title="Attach text or source files">＋<input aria-label="Attach files" type="file" multiple accept=".txt,.md,.markdown,.json,.csv,.log,.yaml,.yml,.toml,.xml,.html,.htm,.css,.scss,.js,.jsx,.ts,.tsx,.py,.rs,.go,.java,.kt,.swift,.c,.h,.cpp,.sh" onChange={(event) => { void addAttachments(event.target.files); event.currentTarget.value = ""; }} /></label>}
         <textarea
@@ -915,6 +943,7 @@ export default function Chat({
           {busy ? "…" : compact ? "↑" : "Send"}
         </button>
       </div>
+      )}
       {compact && listening && <span className="assistant-mic-note" role="status">Microphone level active only; CAMEO is not transcribing speech.</span>}
       {compact && turns.length > 0 && <div className="compact-chat-history-label">Chat history is saved per agent — New chat clears it.</div>}
     </div>

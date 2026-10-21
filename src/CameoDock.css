@@ -1,0 +1,727 @@
+/* ==========================================================================
+   CAMEO Command Dock — Phase 2 redesign
+   Grounded in the CAMEO brand identity: obsidian-navy glass, violet -> cyan
+   gradient signature (echoes logo.svg), Segoe UI Variable type, quiet motion.
+   Follows the app theme: dark by default, honours html[data-theme="light"].
+   All class names are the CameoDock component API — do not rename without
+   updating CameoDock.tsx.
+   ========================================================================== */
+
+:root {
+  --cameo-gradient: linear-gradient(135deg, #8b5cf6 0%, #22d3ee 100%);
+  --cameo-surface: rgba(17, 26, 46, 0.88);
+  --cameo-surface-2: rgba(24, 36, 59, 0.94);
+  --cameo-inset: rgba(7, 10, 20, 0.66);
+  --cameo-line: var(--border, rgba(148, 163, 184, 0.16));
+  --cameo-line-strong: var(--border-strong, rgba(148, 163, 184, 0.32));
+  --cameo-text: var(--text-primary, #f1f5f9);
+  --cameo-muted: var(--text-secondary, #94a3b8);
+  --cameo-faint: var(--text-faint, #64748b);
+  --cameo-violet: #8b5cf6;
+  --cameo-cyan: #22d3ee;
+  --cameo-radius: 18px;
+  --cameo-ease-spring: cubic-bezier(0.22, 1.1, 0.32, 1);
+  --cameo-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+* { box-sizing: border-box; }
+
+/* ---- Stage ---------------------------------------------------------------- */
+.cameo-stage {
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  padding: 0 18px 40px;
+  color: var(--cameo-text);
+  background:
+    radial-gradient(560px 220px at 50% -84px, rgba(139, 92, 246, 0.16), transparent 70%),
+    radial-gradient(720px 300px at 50% 108%, rgba(34, 211, 238, 0.07), transparent 65%),
+    transparent;
+  font-family: var(--font-ui, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cameo-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+
+/* ---- Dock shell ------------------------------------------------------------ */
+.cameo-dock {
+  z-index: 2;
+  position: relative;
+  width: min(940px, calc(100vw - 36px));
+  margin: 0 auto;
+  border: 1px solid var(--cameo-line);
+  border-top: 0;
+  border-radius: 0 0 24px 24px;
+  background: var(--cameo-surface);
+  backdrop-filter: blur(30px) saturate(150%);
+  box-shadow:
+    0 30px 90px rgba(2, 4, 12, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.05) inset;
+  transform-origin: top center;
+  animation: cameo-arrive 0.5s var(--cameo-ease-spring) both;
+  transition: width 0.42s var(--cameo-ease-out), border-radius 0.35s var(--cameo-ease-out);
+  overflow: hidden;
+}
+
+/* Brand signature: violet -> cyan hairline glowing under the pill. */
+.cameo-dock::after {
+  content: "";
+  position: absolute;
+  top: 68px;
+  left: 24px;
+  right: 24px;
+  height: 1px;
+  background: var(--cameo-gradient);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* ---- Pill ------------------------------------------------------------------ */
+.cameo-pill {
+  min-height: 68px;
+  padding: 10px 14px 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: linear-gradient(180deg, rgba(30, 41, 66, 0.55), rgba(15, 22, 40, 0.35));
+  border-bottom: 1px solid var(--cameo-line);
+  user-select: none;
+}
+
+.cameo-brand {
+  border: 0;
+  background: none;
+  color: inherit;
+  padding: 4px 6px 4px 2px;
+  margin: -4px 0 -4px -2px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  cursor: pointer;
+  text-align: left;
+  min-width: 158px;
+}
+
+.cameo-mark {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.25);
+  flex: 0 0 auto;
+}
+
+.cameo-mark img {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+.cameo-brand-copy { display: flex; flex-direction: column; gap: 2px; }
+.cameo-brand-copy strong { font-size: 14px; font-weight: 800; letter-spacing: 0.22em; line-height: 1.1; }
+.cameo-brand-copy small {
+  color: var(--cameo-muted);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+.cameo-separator { width: 1px; height: 28px; background: var(--cameo-line); }
+
+.cameo-current-page {
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 9px 12px;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  background: transparent;
+  color: #dbe2ee;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.cameo-current-page:hover { border-color: var(--cameo-line); background: rgba(148, 163, 184, 0.08); }
+.cameo-current-glyph {
+  background: var(--cameo-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 15px;
+}
+.cameo-chevron { color: var(--cameo-faint); margin-left: 2px; font-size: 11px; }
+
+.cameo-pill-actions { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+
+.cameo-icon-button {
+  width: 35px;
+  height: 35px;
+  display: grid;
+  place-items: center;
+  color: #a8b2c6;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+}
+
+.cameo-icon-button:hover { background: rgba(148, 163, 184, 0.12); color: #fff; border-color: var(--cameo-line); }
+.cameo-icon-button:active { transform: scale(0.93); }
+.cameo-icon-button.is-active { color: var(--cameo-cyan); }
+.cameo-icon-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.cameo-close { background: rgba(148, 163, 184, 0.1); }
+
+/* ---- Panel ----------------------------------------------------------------- */
+.cameo-panel {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  min-height: 430px;
+  max-height: min(660px, calc(100vh - 110px));
+  overflow: hidden;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.22s ease, transform 0.4s var(--cameo-ease-out);
+}
+
+/* ---- Nav rail --------------------------------------------------------------- */
+.cameo-nav {
+  padding: 14px 10px;
+  border-right: 1px solid var(--cameo-line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(7, 10, 20, 0.35);
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.cameo-nav-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.cameo-nav-group:last-child { margin-bottom: 0; }
+
+.cameo-nav-group-title {
+  display: block;
+  padding: 8px 12px 5px;
+  color: var(--cameo-faint);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.cameo-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--cameo-muted);
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  animation: cameo-nav-in 0.35s var(--cameo-ease-out) both;
+}
+
+.cameo-nav-item:hover { color: var(--cameo-text); background: rgba(148, 163, 184, 0.08); }
+
+.cameo-nav-item.selected {
+  color: var(--cameo-text);
+  background: rgba(139, 92, 246, 0.13);
+  border-color: rgba(139, 92, 246, 0.32);
+}
+
+.cameo-nav-item.selected::before {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--cameo-gradient);
+}
+
+.cameo-nav-item.selected .cameo-nav-glyph { color: var(--cameo-cyan); }
+
+.cameo-nav-glyph {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 18px;
+  color: var(--cameo-faint);
+  font-size: 15px;
+}
+
+/* ---- Content ----------------------------------------------------------------- */
+.cameo-content { min-width: 0; overflow: auto; padding: 28px 30px 24px; scrollbar-width: thin; }
+.cameo-content-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+
+.cameo-eyebrow {
+  display: block;
+  background: var(--cameo-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}
+
+.cameo-content h2 { margin: 10px 0 0; font-size: 26px; line-height: 1.15; letter-spacing: -0.03em; font-weight: 700; }
+
+.cameo-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  color: var(--cameo-muted);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid var(--cameo-line);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cameo-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cameo-cyan);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.8);
+  animation: cameo-pulse 2.2s ease-in-out infinite;
+}
+
+.cameo-welcome {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 24px;
+  padding: 16px 18px;
+  border: 1px solid var(--cameo-line);
+  border-radius: var(--cameo-radius);
+  background: linear-gradient(115deg, rgba(139, 92, 246, 0.1), rgba(34, 211, 238, 0.05) 60%, transparent);
+}
+
+.cameo-welcome-mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: rgba(7, 10, 20, 0.5);
+  border: 1px solid var(--cameo-line-strong);
+}
+
+.cameo-welcome-mark img { width: 21px; height: 21px; display: block; }
+
+.cameo-welcome strong { display: block; margin: 1px 0 5px; font-size: 12.5px; }
+.cameo-welcome p { max-width: 500px; margin: 0; color: var(--cameo-muted); font-size: 11.5px; line-height: 1.65; }
+
+.cameo-quick-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+
+.cameo-quick-actions button {
+  min-width: 0;
+  min-height: 102px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 14px;
+  color: var(--cameo-text);
+  background: rgba(148, 163, 184, 0.05);
+  border: 1px solid var(--cameo-line);
+  border-radius: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s var(--cameo-ease-out), background 0.18s ease, border-color 0.18s ease, box-shadow 0.2s ease;
+}
+
+.cameo-quick-actions button:hover {
+  transform: translateY(-2px);
+  background: rgba(139, 92, 246, 0.09);
+  border-color: rgba(139, 92, 246, 0.4);
+  box-shadow: 0 10px 28px rgba(2, 4, 12, 0.4);
+}
+
+.cameo-quick-actions button > span { color: var(--cameo-cyan); font-size: 17px; }
+.cameo-quick-actions b { font-size: 11.5px; font-weight: 650; }
+.cameo-quick-actions small { color: var(--cameo-muted); font-size: 10px; }
+
+/* ---- Composer (command bar) ---------------------------------------------------- */
+.cameo-prompt {
+  margin-top: 16px;
+  padding: 12px 13px 10px;
+  border: 1px solid var(--cameo-line-strong);
+  border-radius: 16px;
+  background: var(--cameo-inset);
+  box-shadow: 0 8px 24px rgba(2, 4, 12, 0.35);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cameo-prompt:focus-within {
+  border-color: rgba(139, 92, 246, 0.65);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.16), 0 8px 24px rgba(2, 4, 12, 0.35);
+}
+
+.cameo-prompt textarea {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  max-height: 110px;
+  resize: vertical;
+  border: 0;
+  outline: 0;
+  color: var(--cameo-text);
+  background: transparent;
+  font-size: 12.5px;
+  line-height: 1.6;
+  font-family: inherit;
+}
+
+.cameo-prompt textarea::placeholder { color: var(--cameo-faint); }
+
+.cameo-prompt-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; }
+.cameo-prompt-footer > span { color: var(--cameo-faint); font-size: 9.5px; }
+
+.cameo-prompt-footer button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: var(--cameo-gradient);
+  color: #0b1020;
+  font-size: 19px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.18s ease;
+}
+
+.cameo-prompt-footer button:hover:not(:disabled) { filter: brightness(1.12); }
+.cameo-prompt-footer button:active:not(:disabled) { transform: scale(0.93); }
+.cameo-prompt-footer button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.cameo-ui-note { margin: 10px 0 0; text-align: center; color: var(--cameo-faint); font-size: 9.5px; }
+
+/* ---- Placeholder pages ------------------------------------------------------------ */
+.cameo-placeholder-page {
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.cameo-placeholder-icon {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  margin-bottom: 20px;
+  border-radius: 16px;
+  color: var(--cameo-cyan);
+  background: rgba(34, 211, 238, 0.09);
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  font-size: 23px;
+}
+
+.cameo-placeholder-page h2 { margin: 8px 0; }
+.cameo-placeholder-page p { max-width: 370px; color: var(--cameo-muted); font-size: 12px; line-height: 1.7; }
+
+.cameo-placeholder-page button {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--cameo-line);
+  border-radius: 11px;
+  background: rgba(148, 163, 184, 0.07);
+  color: var(--cameo-text);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.cameo-placeholder-page button:hover { border-color: rgba(139, 92, 246, 0.45); background: rgba(139, 92, 246, 0.1); }
+.cameo-placeholder-page button span { margin-left: 10px; color: var(--cameo-cyan); }
+
+/* ---- Stage hint ---------------------------------------------------------------------- */
+.cameo-stage-hint {
+  margin-top: auto;
+  padding-top: 40px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--cameo-faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.cameo-stage-hint span { color: var(--cameo-cyan); font-size: 8px; }
+.cameo-stage-hint i { width: 3px; height: 3px; border-radius: 50%; background: var(--cameo-faint); }
+
+/* ---- Orb mode --------------------------------------------------------------------------- */
+.cameo-mode-orb .cameo-dock {
+  width: 70px;
+  height: 70px;
+  overflow: hidden;
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  border-radius: 0 0 24px 24px;
+  box-shadow: 0 0 34px rgba(139, 92, 246, 0.3), 0 18px 50px rgba(2, 4, 12, 0.5);
+}
+
+.cameo-mode-orb .cameo-dock::after { display: none; }
+
+.cameo-mode-orb .cameo-pill {
+  min-height: 69px;
+  padding: 9px;
+  justify-content: center;
+  border-bottom: 0;
+  background: linear-gradient(160deg, rgba(30, 41, 66, 0.9), rgba(15, 22, 40, 0.9));
+}
+
+.cameo-mode-orb .cameo-brand { min-width: 0; margin: 0; padding: 0; }
+.cameo-mode-orb .cameo-brand-copy { display: none; }
+.cameo-mode-orb .cameo-mark { width: 44px; height: 44px; border-radius: 16px; }
+.cameo-mode-orb .cameo-mark img { width: 28px; height: 28px; }
+
+.cameo-orb-expand { display: none; }
+
+.cameo-mode-orb .cameo-orb-expand {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid #0b1020;
+  border-radius: 50%;
+  background: var(--cameo-gradient);
+  cursor: pointer;
+}
+
+.cameo-orb-expand span {
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid #0b1020;
+  border-bottom: 1.5px solid #0b1020;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.cameo-mode-orb .cameo-panel {
+  opacity: 0;
+  transform: translateY(-12px) scaleY(0.94);
+  pointer-events: none;
+  height: 0;
+  min-height: 0;
+}
+
+/* ---- Workspace mode ------------------------------------------------------------------ */
+.cameo-mode-workspace .cameo-dock { width: min(1180px, calc(100vw - 36px)); border-radius: 0 0 26px 26px; }
+.cameo-mode-workspace .cameo-dock::after { top: 68px; }
+.cameo-mode-workspace .cameo-panel { min-height: min(690px, calc(100vh - 110px)); grid-template-columns: 210px minmax(0, 1fr); }
+.cameo-mode-workspace .cameo-content { padding: 36px 42px 30px; }
+.cameo-mode-workspace .cameo-content h2 { font-size: 30px; }
+
+/* ---- Workspace toolbar (host app) ------------------------------------------------- */
+.cameo-workspace-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.cameo-workspace-spacer { flex: 1; }
+
+/* ---- Page menu ----------------------------------------------------------------------------- */
+.cameo-menu-backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(2, 4, 12, 0.45); }
+
+.cameo-page-menu {
+  position: absolute;
+  top: 76px;
+  left: max(calc((100vw - 940px) / 2 + 180px), 190px);
+  width: 230px;
+  padding: 12px;
+  border: 1px solid var(--cameo-line-strong);
+  border-radius: 16px;
+  background: var(--cameo-surface-2);
+  box-shadow: 0 22px 60px rgba(2, 4, 12, 0.6);
+  animation: cameo-menu-in 0.18s var(--cameo-ease-out) both;
+}
+
+.cameo-page-menu .cameo-eyebrow { padding: 5px 9px 10px; }
+
+.cameo-page-menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  color: #d5dce8;
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cameo-page-menu button:hover { background: rgba(148, 163, 184, 0.1); }
+.cameo-page-menu button span { width: 19px; color: var(--cameo-cyan); text-align: center; }
+.cameo-page-menu button b { margin-left: auto; color: var(--cameo-cyan); }
+
+/* ---- A11y + motion ------------------------------------------------------------------------------ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.cameo-dock button:focus-visible,
+.cameo-dock textarea:focus-visible {
+  outline: 2px solid var(--cameo-cyan);
+  outline-offset: 3px;
+}
+
+.cameo-nav::-webkit-scrollbar,
+.cameo-content::-webkit-scrollbar { width: 10px; }
+.cameo-nav::-webkit-scrollbar-thumb,
+.cameo-content::-webkit-scrollbar-thumb {
+  background: var(--cameo-line-strong);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+@keyframes cameo-arrive {
+  from { opacity: 0; transform: translateY(-16px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes cameo-menu-in {
+  from { opacity: 0; transform: translateY(-5px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes cameo-nav-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes cameo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+/* ---- Light theme ----------------------------------------------------------------------------------- */
+html[data-theme="light"] .cameo-stage {
+  background:
+    radial-gradient(560px 220px at 50% -84px, rgba(124, 58, 237, 0.1), transparent 70%),
+    radial-gradient(720px 300px at 50% 108%, rgba(8, 145, 178, 0.08), transparent 65%),
+    transparent;
+}
+
+html[data-theme="light"] .cameo-dock {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16), 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+html[data-theme="light"] .cameo-dock::after { opacity: 0.5; }
+
+html[data-theme="light"] .cameo-pill {
+  background: linear-gradient(180deg, rgba(238, 242, 248, 0.95), rgba(255, 255, 255, 0.75));
+}
+
+html[data-theme="light"] .cameo-current-page { color: #1e293b; }
+html[data-theme="light"] .cameo-current-page:hover { background: rgba(15, 23, 42, 0.05); }
+html[data-theme="light"] .cameo-icon-button { color: #64748b; }
+html[data-theme="light"] .cameo-icon-button:hover { background: rgba(15, 23, 42, 0.06); color: #0f172a; }
+html[data-theme="light"] .cameo-nav { background: rgba(15, 23, 42, 0.03); }
+html[data-theme="light"] .cameo-nav-item:hover { background: rgba(15, 23, 42, 0.05); }
+html[data-theme="light"] .cameo-nav-item.selected { background: rgba(124, 58, 237, 0.09); }
+html[data-theme="light"] .cameo-welcome-mark { background: rgba(124, 58, 237, 0.08); }
+html[data-theme="light"] .cameo-quick-actions button { background: rgba(15, 23, 42, 0.03); }
+html[data-theme="light"] .cameo-quick-actions button:hover { background: rgba(124, 58, 237, 0.07); }
+html[data-theme="light"] .cameo-prompt { background: rgba(255, 255, 255, 0.85); }
+html[data-theme="light"] .cameo-page-menu { background: #ffffff; }
+html[data-theme="light"] .cameo-page-menu button { color: #1e293b; }
+html[data-theme="light"] .cameo-page-menu button:hover { background: rgba(15, 23, 42, 0.05); }
+html[data-theme="light"] .cameo-mode-orb .cameo-pill { background: linear-gradient(160deg, #eef2f8, #ffffff); }
+html[data-theme="light"] .cameo-placeholder-page button { background: rgba(15, 23, 42, 0.04); }
+
+/* ---- Small screens --------------------------------------------------------------------------------- */
+@media (max-width: 700px) {
+  .cameo-stage { padding: 0 8px 24px; }
+  .cameo-dock, .cameo-mode-workspace .cameo-dock { width: calc(100vw - 16px); }
+  .cameo-dock::after { left: 14px; right: 14px; }
+  .cameo-pill { gap: 8px; padding: 8px 9px; }
+  .cameo-brand { min-width: auto; gap: 8px; }
+  .cameo-brand-copy strong { font-size: 11px; }
+  .cameo-brand-copy small, .cameo-separator { display: none; }
+  .cameo-current-page { padding: 8px 7px; gap: 5px; font-size: 11px; }
+  .cameo-icon-button { width: 29px; height: 32px; }
+  .cameo-pill-actions { gap: 1px; }
+  .cameo-panel, .cameo-mode-workspace .cameo-panel { grid-template-columns: 1fr; max-height: calc(100vh - 85px); }
+  .cameo-nav { padding: 9px; border-right: 0; border-bottom: 1px solid var(--cameo-line); flex-direction: row; overflow-x: auto; }
+  .cameo-nav-group { flex-direction: row; margin-bottom: 0; }
+  .cameo-nav-group-title { display: none; }
+  .cameo-nav-item { flex: 0 0 auto; padding: 9px; gap: 6px; }
+  .cameo-nav-item.selected::before { display: none; }
+  .cameo-nav-item > span:last-child { font-size: 10px; }
+  .cameo-content, .cameo-mode-workspace .cameo-content { padding: 21px 16px 20px; }
+  .cameo-content h2, .cameo-mode-workspace .cameo-content h2 { font-size: 21px; }
+  .cameo-quick-actions { grid-template-columns: 1fr; }
+  .cameo-quick-actions button { min-height: 74px; display: grid; grid-template-columns: 25px 1fr; align-items: center; gap: 4px 10px; }
+  .cameo-quick-actions button > span { grid-row: span 2; }
+  .cameo-quick-actions small { grid-column: 2; }
+  .cameo-page-menu { top: 70px; left: 10px; }
+  .cameo-stage-hint { padding-top: 24px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

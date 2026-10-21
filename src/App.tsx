@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { listTasks } from "./services/store";
 import { AGENTS, type AgentId, type TaskRecord } from "./types/tasks";
 import type { AgentActivity } from "./components/AgentAvatar";
-import Sidebar, { NAV_ITEMS, type PageId } from "./components/Sidebar";
+import { NAV_ITEMS, type PageId } from "./components/Sidebar";
+import CameoDock, { type CameoDockPage } from "./CameoDock";
 import { getPref, setPref } from "./services/store";
 import { invoke } from "@tauri-apps/api/core";
 import type { AIProviderId } from "./types/ai";
@@ -29,11 +30,41 @@ const TITLES: Record<PageId, string> = Object.fromEntries(
   NAV_ITEMS.map((n) => [n.id, n.label])
 ) as Record<PageId, string>;
 
+/** Phase-1 dock shell page mapping (bundle labels <-> app page ids). */
+const BUNDLE_PAGE_TO_ID: Record<CameoDockPage, PageId> = {
+  Assistant: "home",
+  Tasks: "tasks",
+  Agents: "agents",
+  Connections: "connections",
+  Developer: "developer",
+  Proxy: "proxy",
+  Browser: "browser",
+  Camera: "camera",
+  Voice: "voice",
+  Power: "power",
+  Settings: "settings",
+  About: "about",
+};
+const PAGE_TO_BUNDLE: Record<PageId, CameoDockPage> = {
+  home: "Assistant",
+  tasks: "Tasks",
+  agents: "Agents",
+  connections: "Connections",
+  developer: "Developer",
+  proxy: "Proxy",
+  browser: "Browser",
+  camera: "Camera",
+  voice: "Voice",
+  power: "Power",
+  settings: "Settings",
+  about: "About",
+};
+
 type WindowMode = "orb" | "dock" | "panel" | "full";
 
 export default function App() {
   const [page, setPage] = useState<PageId>("home");
-  const [collapsed, setCollapsed] = useState(false);
+  const [injectedPrompt, setInjectedPrompt] = useState<{ key: number; text: string } | null>(null);
   const [mode, setMode] = useState<WindowMode>("dock");
   const compact = mode === "dock" || mode === "panel" || mode === "orb";
   const [dockExpanded, setDockExpanded] = useState(false);
@@ -217,6 +248,11 @@ export default function App() {
 
   const navigate = useCallback((id: PageId) => setPage(id), []);
 
+  const handleDockPrompt = useCallback((text: string) => {
+    if (page !== "home") navigate("home");
+    setInjectedPrompt({ key: Date.now(), text });
+  }, [navigate, page]);
+
   const activityFor = (agent: AgentId): AgentActivity => {
     const task = tasksByAgent.get(agent);
     if (!task) return "idle";
@@ -230,14 +266,60 @@ export default function App() {
 
   return (
     <div className={`app-shell ${mode}`} data-mode={mode}>
-      {mode === "full" && (
-        <Sidebar
-          page={page}
-          onNavigate={navigate}
-          collapsed={collapsed}
-          onToggle={() => setCollapsed((c) => !c)}
-        />
-      )}
+      {mode === "full" ? (
+        <CameoDock
+          initialMode="workspace"
+          initialPage={PAGE_TO_BUNDLE[page]}
+          pinned={pinned}
+          onModeChange={(next) => {
+            if (next === "dock") void changeMode("dock");
+            else if (next === "orb") void changeMode("orb");
+          }}
+          onNavigate={(next) => navigate(BUNDLE_PAGE_TO_ID[next])}
+          onPinToggle={() => void togglePin()}
+          onSnapToTop={() => {
+            void invoke("dock_reposition", { mode: "full" });
+          }}
+          onSubmitPrompt={handleDockPrompt}
+          draggable
+        >
+          <div className="cameo-workspace-toolbar">
+            {selection && (
+              <span className="pill accent dock-chip" title="Active provider/model">
+                <span className="dot" />
+                {selection.provider} · {selection.model || "no model chosen"}
+              </span>
+            )}
+            <span className="cameo-workspace-spacer" />
+            <button className="btn small ghost" onClick={() => void changeMode("dock")} aria-label="Return to CAMEO floating dock">
+              Dock
+            </button>
+          </div>
+          {page === "home" ? (
+            <Chat
+              selection={selection}
+              onSelectionChange={changeSelection}
+              hideComposer
+              injectedPrompt={injectedPrompt}
+              onRequestChange={setActiveRequest}
+            />
+          ) : (
+            <div className="page-content">
+              {page === "tasks" && <Tasks />}
+              {page === "agents" && <Agents />}
+              {page === "connections" && <Connections />}
+              {page === "developer" && <Developer />}
+              {page === "proxy" && <Proxy />}
+              {page === "browser" && <Browser />}
+              {page === "camera" && <Camera />}
+              {page === "voice" && <Voice />}
+              {page === "power" && <Power />}
+              {page === "settings" && <Settings onSelectionChange={changeSelection} />}
+              {page === "about" && <About />}
+            </div>
+          )}
+        </CameoDock>
+      ) : (
       <main className="main-area" aria-busy={!selectionLoaded}>
         {mode === "orb" ? (
           <button className="orb-launcher" onClick={() => void changeMode("dock")} aria-label="Expand CAMEO floating dock">
@@ -320,6 +402,7 @@ export default function App() {
         </div>}
         </>}
       </main>
+      )}
     </div>
   );
 }
